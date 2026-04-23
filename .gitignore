@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 .codex
 .codex/
+.worktrees/
 .idea/
 
 # Nested repositories are versioned independently.
