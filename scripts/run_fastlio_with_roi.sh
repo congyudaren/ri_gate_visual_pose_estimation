@@ -29,6 +29,7 @@ DEFAULT_LAUNCH_ARGS=(
   "enable_d435i:=${ROI_LIDAR_CORNER_ENABLE_D435I:-true}"
   "image_topic:=${ROI_LIDAR_CORNER_IMAGE_TOPIC:-/camera/color/image_raw}"
   "camera_info_topic:=${ROI_LIDAR_CORNER_CAMERA_INFO_TOPIC:-/camera/color/camera_info}"
+  "corner_radius:=${ROI_LIDAR_CORNER_CORNER_RADIUS:-5}"
   "detector_backend:=${ROI_LIDAR_CORNER_DETECTOR_BACKEND:-pt}"
   "detector_use_gpu:=${ROI_LIDAR_CORNER_DETECTOR_USE_GPU:-true}"
   "detector_conf_threshold:=${ROI_LIDAR_CORNER_DETECTOR_CONF_THRESHOLD:-0.25}"
