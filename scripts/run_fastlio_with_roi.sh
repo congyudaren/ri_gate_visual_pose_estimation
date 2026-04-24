@@ -50,6 +50,7 @@ DEFAULT_LAUNCH_ARGS=(
   "corner_target_points:=${ROI_LIDAR_CORNER_CORNER_TARGET_POINTS:-6}"
   "corner_target_frames:=${ROI_LIDAR_CORNER_CORNER_TARGET_FRAMES:-2}"
   "corner_cap_points:=${ROI_LIDAR_CORNER_CORNER_CAP_POINTS:-96}"
+  "post_max_z_jump_m:=${ROI_LIDAR_CORNER_POST_MAX_Z_JUMP_M:-0.8}"
   "publish_debug_image:=${ROI_LIDAR_CORNER_PUBLISH_DEBUG_IMAGE:-true}"
   "publish_debug_uv:=${ROI_LIDAR_CORNER_PUBLISH_DEBUG_UV:-true}"
   "debug_overlay_frame_count:=${ROI_LIDAR_CORNER_DEBUG_OVERLAY_FRAME_COUNT:-1}"
