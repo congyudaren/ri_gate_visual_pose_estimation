@@ -50,6 +50,7 @@ export FASTLIO_ENV_ROLE="dev"
 
 _fastlio_source_if_exists "/opt/ros/foxy/setup.bash"
 _fastlio_source_if_exists "${HOME}/code/ws_livox/install/setup.bash"
+_fastlio_source_if_exists "${HOME}/code/fly_sun_frame/install/setup.bash"
 _fastlio_source_if_exists "${WORKSPACE_DIR}/install/setup.bash"
 
 export ONNXRUNTIME_ROOT="${ONNXRUNTIME_ROOT:-/home/sy/opt/onnxruntime}"

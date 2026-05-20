@@ -49,6 +49,7 @@ WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export FASTLIO_ENV_ROLE="nx"
 
 _fastlio_source_if_exists "/opt/ros/foxy/setup.bash"
+_fastlio_source_if_exists "${HOME}/code/fly_sun_frame/install/setup.bash"
 _fastlio_source_if_exists "${WORKSPACE_DIR}/install/setup.bash"
 
 _fastlio_prepend_path LD_PRELOAD "/lib/aarch64-linux-gnu/libgomp.so.1"
