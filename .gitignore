@@ -9,6 +9,7 @@ __pycache__/
 .codex/
 .worktrees/
 .idea/
+.vscode/
 
 # Nested repositories are versioned independently.
 src/fast_lio_lx/
