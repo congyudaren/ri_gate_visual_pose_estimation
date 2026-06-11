@@ -12,8 +12,8 @@ The package consumes upstream image, camera info, point cloud, and odometry topi
 
 Default topics:
 
-- point cloud: `/points`
-- odometry: `/odom`
+- point cloud: `/cloud_registered`
+- odometry: `/Odometry`
 - image: `/camera/color/image_raw`
 - camera info: `/camera/color/camera_info`
 

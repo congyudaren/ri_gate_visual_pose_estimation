@@ -27,8 +27,8 @@ corner_lidar_solver_node:
   ros__parameters:
     roi_topic: /roi_lidar_corner/front_face_rois
     image_topic: /camera/color/image_raw
-    pointcloud_topic: /points
-    odom_topic: /odom
+    pointcloud_topic: /cloud_registered
+    odom_topic: /Odometry
     camera_info_topic: /camera/color/camera_info
     point_output_topic: /roi_lidar_corner/front_face_corners
     debug_output_topic: /roi_lidar_corner/front_face_debug

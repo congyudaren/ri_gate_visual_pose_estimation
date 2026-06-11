@@ -36,8 +36,8 @@ Common launch overrides:
 ros2 launch roi_lidar_corner roi_lidar_corner.launch.py \
   image_topic:=/camera/color/image_raw \
   camera_info_topic:=/camera/color/camera_info \
-  pointcloud_topic:=/points \
-  odom_topic:=/odom
+  pointcloud_topic:=/cloud_registered \
+  odom_topic:=/Odometry
 ```
 
 ## Configuration

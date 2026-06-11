@@ -26,17 +26,50 @@ def _collect_declare_launch_defaults(path: Path) -> dict[str, object]:
     for node in ast.walk(module):
         if not isinstance(node, ast.Call):
             continue
-        if not isinstance(node.func, ast.Name) or node.func.id != "DeclareLaunchArgument":
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id == "DeclareLaunchArgument":
+            default_value_node = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "default_value"),
+                None,
+            )
+        elif node.func.id == "_arg" and len(node.args) >= 2:
+            default_value_node = node.args[1]
+        else:
             continue
         if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
             continue
-        for keyword in node.keywords:
-            if keyword.arg == "default_value":
-                try:
-                    defaults[node.args[0].value] = _literal_value(keyword.value)
-                except TypeError:
-                    pass
+        if default_value_node is None:
+            continue
+        try:
+            defaults[node.args[0].value] = _literal_value(default_value_node)
+        except TypeError:
+            pass
     return defaults
+
+
+def _collect_launch_argument_descriptions(path: Path) -> dict[str, str]:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    descriptions: dict[str, str] = {}
+    for node in ast.walk(module):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id == "DeclareLaunchArgument":
+            description_node = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "description"),
+                None,
+            )
+        elif node.func.id == "_arg" and len(node.args) >= 3:
+            description_node = node.args[2]
+        else:
+            continue
+        if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
+            continue
+        if isinstance(description_node, ast.Constant) and isinstance(description_node.value, str):
+            descriptions[node.args[0].value] = description_node.value
+    return descriptions
 
 
 def _collect_declared_node_defaults(path: Path) -> dict[str, object]:
@@ -68,8 +101,8 @@ def test_standalone_launch_defaults_match_current_wrapper_values() -> None:
     assert defaults["debug_overlay_frame_count"] == "1"
     assert defaults["subscribe_corner3d_debug"] == "true"
     assert defaults["subscribe_solver_debug_uv"] == "true"
-    assert defaults["pointcloud_topic"] == "/points"
-    assert defaults["odom_topic"] == "/odom"
+    assert defaults["pointcloud_topic"] == "/cloud_registered"
+    assert defaults["odom_topic"] == "/Odometry"
     assert defaults["camera_info_topic"] == "/camera/color/camera_info"
     assert defaults["min_points"] == "2"
     assert defaults["max_time_diff_cloud"] == "1.0"
@@ -81,6 +114,17 @@ def test_standalone_launch_defaults_match_current_wrapper_values() -> None:
     assert defaults["corner_target_points"] == "6"
     assert defaults["post_max_z_jump_m"] == "0.8"
     assert defaults["detector_use_gpu"] == "true"
+
+
+def test_standalone_launch_arguments_have_visible_categories() -> None:
+    descriptions = _collect_launch_argument_descriptions(STANDALONE_LAUNCH_PATH)
+
+    assert descriptions["image_topic"].startswith("[输入]")
+    assert descriptions["detector_backend"].startswith("[检测器]")
+    assert descriptions["roi_output_topic"].startswith("[输出]")
+    assert descriptions["min_points"].startswith("[求解/过滤]")
+    assert descriptions["history_window_sec"].startswith("[求解/跟踪]")
+    assert descriptions["output_frame_id"].startswith("[变换]")
 
 
 def test_roi_generator_node_declares_current_wrapper_defaults() -> None:
