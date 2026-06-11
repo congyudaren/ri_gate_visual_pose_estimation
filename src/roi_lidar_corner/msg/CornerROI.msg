@@ -1,0 +1,13 @@
+std_msgs/Header header
+int32 object_id
+int32 class_id
+float32 conf
+int32 corner_label
+int32 mask_origin_x
+int32 mask_origin_y
+int32 mask_width
+int32 mask_height
+float32 corner_u
+float32 corner_v
+uint8[] roi_mask
+bool valid

@@ -1,0 +1,85 @@
+roi_generator_node:
+  ros__parameters:
+    image_topic: /camera/color/image_raw
+    corner_radius: 5
+    detector_backend: pt
+    detector_conf_threshold: 0.25
+    detector_iou_threshold: 0.45
+    detector_input_size: 640
+    detector_use_gpu: true
+    detector_class_filter: "[]"
+    roi_output_topic: /roi_lidar_corner/front_face_rois
+    corner3d_topic: /roi_lidar_corner/front_face_corners
+    solver_debug_uv_topic: /roi_lidar_corner/solver_debug_uv
+    publish_debug_image: true
+    debug_image_topic: /roi_lidar_corner/roi_debug
+    subscribe_corner3d_debug: true
+    subscribe_solver_debug_uv: true
+    neo_canny_low: 50
+    neo_canny_high: 200
+    neo_hough_threshold: 50
+    neo_min_line_length: 50
+    neo_max_line_gap: 50
+    neo_blur_kernel_size: 5
+    neo_border_ratio: 0.15
+
+corner_lidar_solver_node:
+  ros__parameters:
+    roi_topic: /roi_lidar_corner/front_face_rois
+    image_topic: /camera/color/image_raw
+    pointcloud_topic: /points
+    odom_topic: /odom
+    camera_info_topic: /camera/color/camera_info
+    point_output_topic: /roi_lidar_corner/front_face_corners
+    debug_output_topic: /roi_lidar_corner/front_face_debug
+    diag_output_topic: /roi_lidar_corner/solver_diag
+    debug_uv_output_topic: /roi_lidar_corner/solver_debug_uv
+    publish_debug_uv: true
+    debug_overlay_frame_count: 1
+    max_time_diff_cloud: 1.0
+    max_time_diff_odom: 0.5
+    min_points: 2
+    min_range: 0.2
+    max_range: 30.0
+    cloud_frame_mode: auto
+    history_window_sec: 1.0
+    max_window_frames: 30
+    cache_voxel_size: 0.1
+    bbox_expand_ratio: 0.15
+    corner_target_points: 6
+    corner_target_frames: 2
+    corner_cap_points: 96
+    post_max_z_jump_m: 0.8
+    frame_width_m: 1.0
+    frame_height_m: 2.0
+    front_bin_size: 0.05
+    front_keep_tolerance: 0.08
+    rear_gap_m: 1.0
+    rear_gap_tolerance: 0.12
+    output_frame_id: body
+    output_extrinsic_t_x: 0.0
+    output_extrinsic_t_y: 0.0
+    output_extrinsic_t_z: 0.0
+    output_extrinsic_r_00: 0.0
+    output_extrinsic_r_01: 0.0
+    output_extrinsic_r_02: 1.0
+    output_extrinsic_r_10: 1.0
+    output_extrinsic_r_11: 0.0
+    output_extrinsic_r_12: 0.0
+    output_extrinsic_r_20: 0.0
+    output_extrinsic_r_21: 1.0
+    output_extrinsic_r_22: 0.0
+    camera_extrinsic_t: [0.049, 0.29671, 0.01812]
+    camera_extrinsic_r: [0.0, 0.0, 1.0,
+                         1.0, 0.0, 0.0,
+                         0.0, 1.0, 0.0]
+
+roi_lidar_debug_markers:
+  ros__parameters:
+    corner_topic: /roi_lidar_corner/front_face_corners
+    marker_topic: /roi_lidar_corner/front_face_markers
+    show_invalid: false
+    point_scale: 0.08
+    text_scale: 0.08
+    frame_id_fallback: map
+    use_text: true

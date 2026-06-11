@@ -1,0 +1,10 @@
+std_msgs/Header header
+int32 object_id
+int32 class_id
+int32 corner_label
+int32 support_point_count
+float64 x
+float64 y
+float64 z
+float64 fit_error
+bool valid

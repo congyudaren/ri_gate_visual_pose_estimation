@@ -13,5 +13,4 @@ __pycache__/
 # Nested repositories are versioned independently.
 src/fast_lio_lx/
 src/livox_ros_driver2/
-src/roi_lidar_corner
 src/.vscode/
