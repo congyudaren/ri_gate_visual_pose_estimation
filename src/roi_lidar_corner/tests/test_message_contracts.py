@@ -10,7 +10,6 @@ def test_new_message_files_exist() -> None:
         "StructureROI.msg",
         "FrontFaceROI.msg",
         "FrontFaceROIArray.msg",
-        "FrontFaceCorners.msg",
         "FrontFaceDebug.msg",
     }
 
@@ -23,11 +22,11 @@ def test_cmake_generates_new_interfaces() -> None:
         "StructureROI.msg",
         "FrontFaceROI.msg",
         "FrontFaceROIArray.msg",
-        "FrontFaceCorners.msg",
         "FrontFaceDebug.msg",
     ):
         assert f'"msg/{name}"' in text
     assert "geometry_msgs" in text
+    assert "FRONT_FACE_CORNERS_MSG_PKG rotor_swarm_msgs" in text
 
 
 def test_front_face_debug_exposes_structure_state_estimates() -> None:

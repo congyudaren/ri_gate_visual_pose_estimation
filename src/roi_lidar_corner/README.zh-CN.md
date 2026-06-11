@@ -62,5 +62,5 @@ colcon list --packages-select roi_lidar_corner
 colcon build --symlink-install --packages-select roi_lidar_corner
 ros2 launch roi_lidar_corner roi_lidar_corner.launch.py --show-args
 python3 -m py_compile src/roi_lidar_corner/launch/*.py src/roi_lidar_corner/roi_lidar_corner/*.py
-pytest src/roi_lidar_corner/tests
+python3 -m pytest src/roi_lidar_corner/tests
 ```

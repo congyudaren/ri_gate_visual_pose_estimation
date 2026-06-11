@@ -329,6 +329,8 @@ def load_solver_node_module():
         "roi_lidar_corner.structure_point_filter",
         "roi_lidar_corner.structure_tracker",
         "roi_lidar_corner.front_face_restorer",
+        "rotor_swarm_msgs",
+        "rotor_swarm_msgs.msg",
         "rclpy",
         "rclpy.node",
         "sensor_msgs",
@@ -353,9 +355,14 @@ def load_solver_node_module():
     msg_module.StructureROI = StructureROI
     msg_module.FrontFaceROI = FrontFaceROI
     msg_module.FrontFaceROIArray = FrontFaceROIArray
-    msg_module.FrontFaceCorners = FrontFaceCorners
     msg_module.FrontFaceDebug = FrontFaceDebug
     _install_module("roi_lidar_corner.msg", msg_module)
+
+    rotor_swarm_msgs_module = types.ModuleType("rotor_swarm_msgs")
+    rotor_swarm_msgs_msg_module = types.ModuleType("rotor_swarm_msgs.msg")
+    rotor_swarm_msgs_msg_module.FrontFaceCorners = FrontFaceCorners
+    _install_module("rotor_swarm_msgs", rotor_swarm_msgs_module)
+    _install_module("rotor_swarm_msgs.msg", rotor_swarm_msgs_msg_module)
 
     rclpy_module = types.ModuleType("rclpy")
     rclpy_module.init = lambda: None

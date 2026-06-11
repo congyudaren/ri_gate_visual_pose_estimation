@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The canonical ROI perception package lives in `src/roi_lidar_corner/` with Python nodes in `roi_lidar_corner/`, message definitions in `msg/`, launch files in `launch/`, configs in `config/`, models in `models/`, and tests in `tests/`. Legacy FAST-LIO/Livox integration references live under `archive/fastlio_integration/` and are not maintained runtime entrypoints. `src/fast_lio_lx/` and `src/livox_ros_driver2/` may remain in local workspaces as optional upstream data producers; keep edits there minimal and upstream-compatible.
+The canonical ROI perception package lives in `src/roi_lidar_corner/` with Python nodes in `roi_lidar_corner/`, message definitions in `msg/`, launch files in `launch/`, configs in `config/`, models in `models/`, and tests in `tests/`. Legacy FAST-LIO/Livox integration references live under `archive/fastlio_integration/` and are not maintained runtime entrypoints. FAST-LIO and Livox are external upstream data producers if needed; they are no longer source packages in this repository.
 
 ## Build, Test, and Development Commands
 Build and verify the ROI package directly:
@@ -9,7 +9,7 @@ Build and verify the ROI package directly:
 - `colcon list --packages-select roi_lidar_corner` to confirm package discovery
 - `colcon build --symlink-install --packages-select roi_lidar_corner` to build ROI only
 - `ros2 launch roi_lidar_corner roi_lidar_corner.launch.py` to launch the standalone ROI flow
-- `pytest src/roi_lidar_corner/tests` for ROI solver and launch-default tests
+- `python3 -m pytest src/roi_lidar_corner/tests` for ROI solver and launch-default tests
 - `python3 -m py_compile src/roi_lidar_corner/launch/*.py src/roi_lidar_corner/roi_lidar_corner/*.py` for quick Python syntax verification
 
 ## Coding Style & Naming Conventions

@@ -11,7 +11,7 @@ from roi_lidar_corner.offline_front_face_validation import (
 
 
 def test_load_static_scene_case_reads_rgb_and_npz_assets() -> None:
-    workspace = Path(__file__).resolve().parents[4]
+    workspace = Path(__file__).resolve().parents[3]
     image_path = workspace / "analysis_artifacts/exposure_from_nx/lidar_projection_exposure_20260423_220029_0p5s.png"
     npz_path = workspace / "analysis_artifacts/exposure_from_nx/lidar_projection_exposure_20260423_221950_20s_points.npz"
 
@@ -47,7 +47,7 @@ def test_uv_depth_to_xyz_cam_uses_pinhole_intrinsics() -> None:
 
 
 def test_load_static_scene_case_can_apply_rotation_and_intrinsics() -> None:
-    workspace = Path(__file__).resolve().parents[4]
+    workspace = Path(__file__).resolve().parents[3]
     image_path = workspace / "analysis_artifacts/exposure_from_nx/lidar_projection_exposure_20260423_220029_0p5s.png"
     npz_path = workspace / "analysis_artifacts/exposure_from_nx/lidar_projection_exposure_20260423_221950_20s_points.npz"
     intrinsics = CameraIntrinsics(

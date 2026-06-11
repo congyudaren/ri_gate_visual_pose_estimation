@@ -145,7 +145,11 @@ def test_standalone_launch_forces_detector_class_filter_through_string_parameter
     description = module.generate_launch_description()
 
     generator = _find_node(description, executable="roi_generator_node.py")
-    detector_class_filter = generator.parameters[0]["detector_class_filter"]
+    merged_parameters = {}
+    for parameter_set in generator.parameters:
+        if isinstance(parameter_set, dict):
+            merged_parameters.update(parameter_set)
+    detector_class_filter = merged_parameters["detector_class_filter"]
 
     assert isinstance(detector_class_filter, FakeParameterValue)
     assert detector_class_filter.value_type is str

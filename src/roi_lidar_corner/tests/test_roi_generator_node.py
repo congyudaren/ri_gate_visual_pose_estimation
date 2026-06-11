@@ -28,6 +28,8 @@ def _load_generator_module():
         "sensor_msgs.msg",
         "std_msgs",
         "std_msgs.msg",
+        "rotor_swarm_msgs",
+        "rotor_swarm_msgs.msg",
         "roi_lidar_corner",
         "roi_lidar_corner.detection_runtime",
         "roi_lidar_corner.msg",
@@ -246,6 +248,38 @@ def _load_generator_module():
     roi_msg.FrontFaceROI = FakeFrontFaceROI
     roi_msg.FrontFaceROIArray = FakeFrontFaceROIArray
     _install_module("roi_lidar_corner.msg", roi_msg)
+
+    rotor_swarm_msgs = types.ModuleType("rotor_swarm_msgs")
+    rotor_swarm_msgs_msg = types.ModuleType("rotor_swarm_msgs.msg")
+
+    class FakePoint:
+        def __init__(self):
+            self.x = 0.0
+            self.y = 0.0
+            self.z = 0.0
+
+    class FakeFrontFaceCorners:
+        CORNER_INVALID = 2
+        SOLUTION_INVALID = 0
+
+        def __init__(self):
+            self.header = FakeHeader()
+            self.valid = False
+            self.solution_state = self.SOLUTION_INVALID
+            self.tracking_confidence = 0.0
+            self.top_source = ""
+            self.top_left = FakePoint()
+            self.top_right = FakePoint()
+            self.bottom_left = FakePoint()
+            self.bottom_right = FakePoint()
+            self.top_left_status = self.CORNER_INVALID
+            self.top_right_status = self.CORNER_INVALID
+            self.bottom_left_status = self.CORNER_INVALID
+            self.bottom_right_status = self.CORNER_INVALID
+
+    rotor_swarm_msgs_msg.FrontFaceCorners = FakeFrontFaceCorners
+    _install_module("rotor_swarm_msgs", rotor_swarm_msgs)
+    _install_module("rotor_swarm_msgs.msg", rotor_swarm_msgs_msg)
 
     neo_roi_refiner = types.ModuleType("roi_lidar_corner.neo_roi_refiner")
     neo_roi_refiner.refine_corners_inside_bbox = lambda *_args, **_kwargs: []
