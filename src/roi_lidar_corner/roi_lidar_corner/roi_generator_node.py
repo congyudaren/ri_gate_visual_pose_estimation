@@ -8,6 +8,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
+from ament_index_python.packages import get_package_share_directory
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
@@ -45,6 +46,13 @@ CORNER_COLORS = {
     2: (255, 0, 0),
     3: (0, 255, 255),
 }
+
+
+def _default_share_file(*parts: str) -> str:
+    try:
+        return str(Path(get_package_share_directory("roi_lidar_corner"), *parts))
+    except Exception:
+        return ""
 
 
 def _parse_detector_class_filter(raw_value: str) -> List[int]:
@@ -166,8 +174,8 @@ class RoiGeneratorNode(Node):
         self.declare_parameter("subscribe_solver_debug_uv", True)
 
         self.declare_parameter("detector_backend", "pt")
-        self.declare_parameter("detector_model_path", "")
-        self.declare_parameter("detector_names_path", "")
+        self.declare_parameter("detector_model_path", _default_share_file("models", "best.pt"))
+        self.declare_parameter("detector_names_path", _default_share_file("models", "detect.names"))
         self.declare_parameter("detector_conf_threshold", 0.25)
         self.declare_parameter("detector_iou_threshold", 0.45)
         self.declare_parameter("detector_input_size", 640)

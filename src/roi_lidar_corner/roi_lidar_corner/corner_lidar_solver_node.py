@@ -189,32 +189,32 @@ class CornerLidarSolverNode(Node):
         self.declare_parameter("front_keep_tolerance", 0.08)
         self.declare_parameter("rear_gap_m", 1.0)
         self.declare_parameter("rear_gap_tolerance", 0.12)
-        self.declare_parameter("output_frame_id", "camera")
+        self.declare_parameter("output_frame_id", "body")
         self.declare_parameter("output_extrinsic_t_x", 0.0)
         self.declare_parameter("output_extrinsic_t_y", 0.0)
         self.declare_parameter("output_extrinsic_t_z", 0.0)
-        self.declare_parameter("output_extrinsic_r_00", 1.0)
+        self.declare_parameter("output_extrinsic_r_00", 0.0)
         self.declare_parameter("output_extrinsic_r_01", 0.0)
-        self.declare_parameter("output_extrinsic_r_02", 0.0)
-        self.declare_parameter("output_extrinsic_r_10", 0.0)
-        self.declare_parameter("output_extrinsic_r_11", 1.0)
+        self.declare_parameter("output_extrinsic_r_02", 1.0)
+        self.declare_parameter("output_extrinsic_r_10", 1.0)
+        self.declare_parameter("output_extrinsic_r_11", 0.0)
         self.declare_parameter("output_extrinsic_r_12", 0.0)
         self.declare_parameter("output_extrinsic_r_20", 0.0)
-        self.declare_parameter("output_extrinsic_r_21", 0.0)
-        self.declare_parameter("output_extrinsic_r_22", 1.0)
-        self.declare_parameter("camera_extrinsic_t", [0.0, 0.0, 0.0])
+        self.declare_parameter("output_extrinsic_r_21", 1.0)
+        self.declare_parameter("output_extrinsic_r_22", 0.0)
+        self.declare_parameter("camera_extrinsic_t", [0.049, 0.29671, 0.01812])
         self.declare_parameter(
             "camera_extrinsic_r",
             [
+                0.0,
+                0.0,
+                1.0,
                 1.0,
                 0.0,
                 0.0,
                 0.0,
                 1.0,
                 0.0,
-                0.0,
-                0.0,
-                1.0,
             ],
         )
 
@@ -303,8 +303,8 @@ class CornerLidarSolverNode(Node):
 
         try:
             self.t_cb, self.R_cb = _load_camera_extrinsics(
-                self.get_parameter("camera_extrinsic_t").get_parameter_value().double_array_value,
-                self.get_parameter("camera_extrinsic_r").get_parameter_value().double_array_value,
+                self.get_parameter("camera_extrinsic_t").value,
+                self.get_parameter("camera_extrinsic_r").value,
             )
             self.get_logger().info("Loaded solver camera extrinsics from ROI parameters")
         except Exception as exc:

@@ -17,7 +17,7 @@ class RoiLidarDebugMarkerNode(Node):
 
         self.declare_parameter("corner_topic", "/roi_lidar_corner/front_face_corners")
         self.declare_parameter("marker_topic", "/roi_lidar_corner/front_face_markers")
-        self.declare_parameter("show_invalid", True)
+        self.declare_parameter("show_invalid", False)
         self.declare_parameter("point_scale", 0.08)
         self.declare_parameter("text_scale", 0.08)
         self.declare_parameter("frame_id_fallback", "map")

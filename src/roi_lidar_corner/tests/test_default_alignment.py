@@ -8,6 +8,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 STANDALONE_LAUNCH_PATH = PACKAGE_ROOT / "launch" / "roi_lidar_corner.launch.py"
 GENERATOR_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_generator_node.py"
 SOLVER_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "corner_lidar_solver_node.py"
+DEBUG_MARKERS_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_lidar_debug_markers.py"
 
 
 def _literal_value(node: ast.AST):
@@ -129,11 +130,14 @@ def test_standalone_launch_arguments_have_visible_categories() -> None:
 
 def test_roi_generator_node_declares_current_wrapper_defaults() -> None:
     defaults = _collect_declared_node_defaults(GENERATOR_NODE_PATH)
+    text = GENERATOR_NODE_PATH.read_text(encoding="utf-8")
 
     assert defaults["image_topic"] == "/camera/color/image_raw"
     assert defaults["publish_debug_image"] is True
     assert defaults["corner_radius"] == 5
     assert defaults["detector_backend"] == "pt"
+    assert 'declare_parameter("detector_model_path", _default_share_file("models", "best.pt"))' in text
+    assert 'declare_parameter("detector_names_path", _default_share_file("models", "detect.names"))' in text
     assert defaults["detector_use_gpu"] is True
     assert defaults["detector_class_filter"] == "[]"
 
@@ -150,3 +154,33 @@ def test_corner_solver_node_declares_current_wrapper_defaults() -> None:
     assert defaults["max_window_frames"] == 30
     assert defaults["corner_target_points"] == 6
     assert defaults["post_max_z_jump_m"] == 0.8
+    assert defaults["output_frame_id"] == "body"
+    assert defaults["output_extrinsic_r_00"] == 0.0
+    assert defaults["output_extrinsic_r_02"] == 1.0
+    assert defaults["output_extrinsic_r_10"] == 1.0
+    assert defaults["output_extrinsic_r_21"] == 1.0
+    assert defaults["output_extrinsic_r_22"] == 0.0
+    assert defaults["camera_extrinsic_t"] == [0.049, 0.29671, 0.01812]
+    assert defaults["camera_extrinsic_r"] == [
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+    ]
+
+
+def test_debug_marker_node_declares_launch_defaults() -> None:
+    defaults = _collect_declared_node_defaults(DEBUG_MARKERS_NODE_PATH)
+
+    assert defaults["corner_topic"] == "/roi_lidar_corner/front_face_corners"
+    assert defaults["marker_topic"] == "/roi_lidar_corner/front_face_markers"
+    assert defaults["show_invalid"] is False
+    assert defaults["point_scale"] == 0.08
+    assert defaults["text_scale"] == 0.08
+    assert defaults["frame_id_fallback"] == "map"
+    assert defaults["use_text"] is True
