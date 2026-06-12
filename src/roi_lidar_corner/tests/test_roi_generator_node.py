@@ -19,6 +19,8 @@ def _install_module(name: str, module: types.ModuleType) -> None:
 def _load_generator_module():
     for name in [
         "roi_generator_node_under_test",
+        "ament_index_python",
+        "ament_index_python.packages",
         "cv2",
         "rclpy",
         "rclpy.node",
@@ -72,6 +74,12 @@ def _load_generator_module():
 
     cv2.putText = fake_put_text
     _install_module("cv2", cv2)
+
+    ament_index_python = types.ModuleType("ament_index_python")
+    ament_packages = types.ModuleType("ament_index_python.packages")
+    ament_packages.get_package_share_directory = lambda package_name: f"/fake/share/{package_name}"
+    _install_module("ament_index_python", ament_index_python)
+    _install_module("ament_index_python.packages", ament_packages)
 
     rclpy = types.ModuleType("rclpy")
     rclpy_node = types.ModuleType("rclpy.node")
@@ -343,8 +351,8 @@ def test_publishes_structure_rois_from_refined_corners() -> None:
     published = node.publisher.published[-1]
     structures = published.objects[0].structures
     assert [item.structure_label for item in structures] == [0, 1, 2]
-    assert structures[2].line_v0 == 60.0
-    assert structures[2].line_v1 == 60.0
+    assert structures[2].line_v0 == 20.0
+    assert structures[2].line_v1 == 20.0
     assert structures[2].mask_width > 0
     assert structures[2].mask_height > 0
 

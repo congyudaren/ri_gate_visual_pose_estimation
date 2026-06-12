@@ -64,6 +64,11 @@ def generate_launch_description() -> LaunchDescription:
     debug_image_topic_arg = _arg(
         "debug_image_topic", "/roi_lidar_corner/roi_debug", "[调试] ROI 叠加图像输出 topic。"
     )
+    corner3d_topic_arg = _arg(
+        "corner3d_topic",
+        "/roi_lidar_corner/corners3d",
+        "[调试] legacy Corner3DArray 调试输入 topic，必须与 FrontFaceCorners 输出 topic 分离。",
+    )
 
     # ROI 包输出 topic：这些是本包对外发布的主要结果。
     roi_output_topic_arg = _arg("roi_output_topic", "/roi_lidar_corner/front_face_rois", "[输出] 前脸 ROI 数组 topic。")
@@ -147,6 +152,7 @@ def generate_launch_description() -> LaunchDescription:
     subscribe_solver_debug_uv = LaunchConfiguration("subscribe_solver_debug_uv")
     enable_debug_markers = LaunchConfiguration("enable_debug_markers")
     debug_image_topic = LaunchConfiguration("debug_image_topic")
+    corner3d_topic = LaunchConfiguration("corner3d_topic")
 
     # ROI 包输出 topic。
     roi_output_topic = LaunchConfiguration("roi_output_topic")
@@ -209,7 +215,7 @@ def generate_launch_description() -> LaunchDescription:
                 "detector_class_filter": ParameterValue(detector_class_filter, value_type=str),
                 # 发布的 ROI/调试 topic。
                 "roi_output_topic": roi_output_topic,
-                "corner3d_topic": point_output_topic,
+                "corner3d_topic": corner3d_topic,
                 "solver_debug_uv_topic": debug_uv_output_topic,
                 "subscribe_corner3d_debug": subscribe_corner3d_debug,
                 "subscribe_solver_debug_uv": subscribe_solver_debug_uv,
@@ -339,6 +345,7 @@ def generate_launch_description() -> LaunchDescription:
             subscribe_solver_debug_uv_arg,
             enable_debug_markers_arg,
             debug_image_topic_arg,
+            corner3d_topic_arg,
 
             # ROI 包输出 topic。
             roi_output_topic_arg,

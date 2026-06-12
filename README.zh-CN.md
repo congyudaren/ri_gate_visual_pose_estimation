@@ -1,54 +1,42 @@
-# roi_lidar_corner
+# ROI LiDAR Corner
 
-`roi_lidar_corner` 是一个独立的 ROS 2 包，用于 ROI 生成和基于点云的前表面角点求解。它从上游图像、相机内参、点云和里程计 topic 读取数据，并发布 ROI、调试信息和 `FrontFaceCorners` 输出。
-
-## 构建
-
-```bash
-colcon build --symlink-install --packages-select roi_lidar_corner
-source install/setup.bash
-```
-
-`FrontFaceCorners` 仍由外部消息包提供。当前依赖包名是 `rotor_swarm_msgs`；如果后续包名变更，需要同时更新 `package.xml`、`CMakeLists.txt` 和 Python import。
-
-## 启动
-
-```bash
-ros2 launch roi_lidar_corner roi_lidar_corner.launch.py
-```
-
-默认配置文件为：
+这个仓库现在是一个以 `roi_lidar_corner` 为中心的 ROI-only ROS 2 工作空间：
 
 ```text
-config/roi_lidar_corner.yaml
+src/roi_lidar_corner
 ```
 
-可通过 launch 参数替换配置：
+该包消费上游的图像、相机内参、点云和里程计 topic，然后发布 ROI 和前表面角点输出。FAST-LIO 和 Livox 已不再作为本仓库的一部分；如有需要，请从外部工作空间启动它们，作为上游数据生产者。
+
+## 期望输入
+
+默认 topic 如下：
+
+- 点云：`/cloud_registered`
+- 里程计：`/Odometry`
+- 图像：`/camera/color/image_raw`
+- 相机内参：`/camera/color/camera_info`
+
+这些都可以通过 `roi_lidar_corner.launch.py` 的参数或包内配置覆盖。
+
+## 构建与启动
 
 ```bash
-ros2 launch roi_lidar_corner roi_lidar_corner.launch.py \
-  config_file:=/path/to/roi_lidar_corner.yaml
-```
-
-常用 topic 覆盖：
-
-```bash
-ros2 launch roi_lidar_corner roi_lidar_corner.launch.py \
-  image_topic:=/camera/color/image_raw \
-  camera_info_topic:=/camera/color/camera_info \
-  pointcloud_topic:=/cloud_registered \
-  odom_topic:=/Odometry
+colcon list
+colcon build --symlink-install --packages-select roi_lidar_corner
+source install/setup.bash
+ros2 launch roi_lidar_corner roi_lidar_corner.launch.py
 ```
 
 ## 节点与工作流
 
-`roi_lidar_corner` 运行时主要由 `src/roi_lidar_corner/roi_lidar_corner/` 下的三个节点组成，并通过 `src/roi_lidar_corner/launch/roi_lidar_corner.launch.py` 串联起来。
+这个工作空间里，`roi_lidar_corner` 运行时主要包含三个节点，串联关系由 `src/roi_lidar_corner/launch/roi_lidar_corner.launch.py` 负责。
 
 ### 运行时节点
 
 - `roi_generator_node.py`
   - 主文件：`src/roi_lidar_corner/roi_lidar_corner/roi_generator_node.py`
-  - 作用：订阅相机图像，运行检测器，构建结构体 ROI 和前表面 ROI，并发布 ROI 相关输出。
+  - 作用：订阅图像流，运行检测器，构建结构体 ROI 和前表面 ROI，并发布 ROI 输出。
   - 关键输入：`image_topic`、检测器参数、ROI 细化参数。
   - 关键输出：`roi_output_topic`、`point_output_topic`、`debug_image_topic`、`debug_uv_output_topic`。
 
@@ -88,21 +76,6 @@ ros2 launch roi_lidar_corner roi_lidar_corner.launch.py \
 4. `roi_lidar_debug_markers` 可以订阅 `FrontFaceCorners` 并发布 RViz marker，用于可视化。
 5. `roi_lidar_debug_view.py` 等可选调试工具可以订阅调试图像 topic 做离线检查，但不属于默认启动链路。
 
-## 配置
-
-相机到输出坐标系的投影外参使用通用 ROI 参数：
-
-```yaml
-corner_lidar_solver_node:
-  ros__parameters:
-    camera_extrinsic_t: [0.049, 0.29671, 0.01812]
-    camera_extrinsic_r: [0.0, 0.0, 1.0,
-                         1.0, 0.0, 0.0,
-                         0.0, 1.0, 0.0]
-```
-
-Topic 默认值、检测器选项、求解器阈值和调试设置都放在 `config/roi_lidar_corner.yaml`。
-
 ## 验证
 
 ```bash
@@ -112,3 +85,13 @@ ros2 launch roi_lidar_corner roi_lidar_corner.launch.py --show-args
 python3 -m py_compile src/roi_lidar_corner/launch/*.py src/roi_lidar_corner/roi_lidar_corner/*.py
 python3 -m pytest src/roi_lidar_corner/tests
 ```
+
+## 旧版集成归档
+
+历史上的 FAST-LIO/Livox 集成参考文件保留在：
+
+```text
+archive/fastlio_integration
+```
+
+这些文件仅作为非运行时参考，不再作为本仓库维护的 launch 入口。

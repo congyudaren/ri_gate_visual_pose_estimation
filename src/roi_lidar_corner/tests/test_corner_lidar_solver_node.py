@@ -257,6 +257,7 @@ class FakeParameterValue:
 class FakeParameter:
     def __init__(self, value):
         self._value = value
+        self.value = value
 
     def get_parameter_value(self) -> FakeParameterValue:
         return FakeParameterValue(self._value)
@@ -517,6 +518,20 @@ def test_node_loads_camera_offsets_from_roi_parameters() -> None:
     assert any("Loaded solver camera extrinsics from ROI parameters" in record for record in node.get_logger().records)
 
 
+def test_active_roi_callback_publishes_projected_cloud_debug_uv() -> None:
+    module, _lookback_module = load_solver_node_module()
+    node = module.CornerLidarSolverNode()
+    node.debug_projected_cloud_stride = 1
+    node.cache_voxel_size = 0.0
+
+    drive_solver_callbacks(node)
+
+    debug_payload = json.loads(node.debug_uv_pub.messages[-1].data)
+    assert debug_payload["cloud_uv"] == [[10, 20], [10, 21]]
+    assert debug_payload["cloud_uv_depth"] == [5.0, 5.0]
+    assert debug_payload["stats"]["points_kept_sum"] > 0
+
+
 def test_node_declares_lookback_window_parameters() -> None:
     module, _ = load_solver_node_module()
 
@@ -535,6 +550,8 @@ def test_node_declares_lookback_window_parameters() -> None:
 def test_solver_node_publishes_front_face_outputs() -> None:
     module, _lookback_module = load_solver_node_module()
     node = module.CornerLidarSolverNode()
+    node.output_extrinsic_R = np.eye(3, dtype=np.float64)
+    node.output_extrinsic_t = np.zeros(3, dtype=np.float64)
     module.restore_front_face = lambda track, width_m, height_m: types.SimpleNamespace(
         valid=True,
         solution_state="tracking",

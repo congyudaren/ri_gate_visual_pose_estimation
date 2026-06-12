@@ -9,7 +9,7 @@ roi_generator_node:
     detector_use_gpu: true
     detector_class_filter: "[]"
     roi_output_topic: /roi_lidar_corner/front_face_rois
-    corner3d_topic: /roi_lidar_corner/front_face_corners
+    corner3d_topic: /roi_lidar_corner/corners3d
     solver_debug_uv_topic: /roi_lidar_corner/solver_debug_uv
     publish_debug_image: true
     debug_image_topic: /roi_lidar_corner/roi_debug

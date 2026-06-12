@@ -10,9 +10,9 @@ def build_structure_lines(
     corners: Mapping[str, tuple[float, float]],
 ) -> dict[str, tuple[tuple[float, float], tuple[float, float]]]:
     return {
-        "top_beam": (tuple(corners["BL"]), tuple(corners["BR"])),
-        "left_post": (tuple(corners["TR"]), tuple(corners["BR"])),
-        "right_post": (tuple(corners["TL"]), tuple(corners["BL"])),
+        "top_beam": (tuple(corners["TL"]), tuple(corners["TR"])),
+        "left_post": (tuple(corners["TL"]), tuple(corners["BL"])),
+        "right_post": (tuple(corners["TR"]), tuple(corners["BR"])),
     }
 
 

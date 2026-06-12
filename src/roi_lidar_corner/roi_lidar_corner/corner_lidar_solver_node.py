@@ -458,7 +458,7 @@ class CornerLidarSolverNode(Node):
             stats = self._update_track_from_roi(msg, window_frames, pose)
             self._publish_solution(msg.header)
             if self.publish_debug_uv:
-                self._publish_empty_debug_uv(msg.header, stats=stats)
+                self._publish_projected_cloud_debug_uv(msg.header, window_frames, pose, stats=stats)
             diag["valid"] = bool(self.point_pub.messages[-1].valid) if hasattr(self.point_pub, "messages") and self.point_pub.messages else None
             diag["frames_seen"] = int(stats.get("frames_seen", len(window_frames)))
             diag["frames_used"] = int(stats.get("frames_used", 0))
@@ -511,6 +511,65 @@ class CornerLidarSolverNode(Node):
                         "objects": [],
                         "cloud_uv": [],
                         "cloud_uv_depth": [],
+                        "stats": stats or {},
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        )
+
+    def _publish_projected_cloud_debug_uv(
+        self,
+        header: Header,
+        frames: Sequence[DecodedCloudFrame],
+        pose: _BufferedPose,
+        stats: Optional[Dict] = None,
+    ) -> None:
+        proj_fx, proj_fy, proj_cx, proj_cy, image_w, image_h = self._scaled_intrinsics()
+        normalized_frames = self._normalize_window_frames(frames)
+        overlay_frames = list(normalized_frames[: self.debug_overlay_frame_count])
+        projected_cloud_uv = []
+        projected_cloud_depth = []
+        for frame in overlay_frames:
+            frame_points, frame_uv, _, _ = _project_cached_frame(
+                frame=frame,
+                pose=pose,
+                fx=proj_fx,
+                fy=proj_fy,
+                cx=proj_cx,
+                cy=proj_cy,
+                image_width=image_w,
+                image_height=image_h,
+                t_cb=self.t_cb.astype(np.float32),
+                R_cb=self.R_cb.astype(np.float32),
+                cloud_frame_mode=self.cloud_frame_mode,
+                min_range=self.lookback_params.min_range,
+                max_range=self.lookback_params.max_range,
+            )
+            if frame_uv.size != 0:
+                projected_cloud_uv.append(frame_uv)
+                projected_cloud_depth.append(np.asarray(frame_points[:, 2], dtype=np.float32).reshape(-1))
+
+        cloud_uv = []
+        cloud_uv_depth = []
+        if projected_cloud_uv:
+            stacked_uv = np.vstack(projected_cloud_uv)
+            stacked_depth = np.concatenate(projected_cloud_depth)
+            for (u, v), depth in zip(
+                stacked_uv[:: self.debug_projected_cloud_stride],
+                stacked_depth[:: self.debug_projected_cloud_stride],
+            ):
+                cloud_uv.append([int(round(float(np.floor(u)))), int(round(float(np.floor(v))))])
+                cloud_uv_depth.append(float(depth))
+
+        self.debug_uv_pub.publish(
+            String(
+                data=json.dumps(
+                    {
+                        "stamp": _stamp_to_sec(header.stamp),
+                        "objects": [],
+                        "cloud_uv": cloud_uv,
+                        "cloud_uv_depth": cloud_uv_depth,
                         "stats": stats or {},
                     },
                     ensure_ascii=False,

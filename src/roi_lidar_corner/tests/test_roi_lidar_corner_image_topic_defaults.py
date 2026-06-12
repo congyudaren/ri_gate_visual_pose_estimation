@@ -155,3 +155,21 @@ def test_standalone_launch_forces_detector_class_filter_through_string_parameter
     assert detector_class_filter.value_type is str
     assert isinstance(detector_class_filter.value, FakeLaunchConfiguration)
     assert detector_class_filter.value.name == "detector_class_filter"
+
+
+def test_standalone_launch_keeps_legacy_corner3d_debug_topic_off_front_face_corners() -> None:
+    module = _load_launch_module()
+    description = module.generate_launch_description()
+    defaults = _declare_argument_defaults(description)
+
+    generator = _find_node(description, executable="roi_generator_node.py")
+    merged_parameters = {}
+    for parameter_set in generator.parameters:
+        if isinstance(parameter_set, dict):
+            merged_parameters.update(parameter_set)
+
+    assert defaults["corner3d_topic"] == "/roi_lidar_corner/corners3d"
+    assert defaults["point_output_topic"] == "/roi_lidar_corner/front_face_corners"
+    assert isinstance(merged_parameters["corner3d_topic"], FakeLaunchConfiguration)
+    assert merged_parameters["corner3d_topic"].name == "corner3d_topic"
+    assert merged_parameters["corner3d_topic"].name != "point_output_topic"

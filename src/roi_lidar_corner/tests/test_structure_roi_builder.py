@@ -1,10 +1,16 @@
+from pathlib import Path
+import sys
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE_ROOT))
+
 from roi_lidar_corner.structure_roi_builder import (
     build_structure_lines,
     dilate_line_mask,
 )
 
 
-def test_build_structure_lines_uses_physical_semantics_for_inverted_camera() -> None:
+def test_build_structure_lines_uses_image_top_edge_for_top_beam() -> None:
     corners = {
         "TL": (10.0, 20.0),
         "TR": (30.0, 20.0),
@@ -14,9 +20,9 @@ def test_build_structure_lines_uses_physical_semantics_for_inverted_camera() -> 
 
     lines = build_structure_lines(corners)
 
-    assert lines["top_beam"] == ((10.0, 60.0), (30.0, 60.0))
-    assert lines["left_post"] == ((30.0, 20.0), (30.0, 60.0))
-    assert lines["right_post"] == ((10.0, 20.0), (10.0, 60.0))
+    assert lines["top_beam"] == ((10.0, 20.0), (30.0, 20.0))
+    assert lines["left_post"] == ((10.0, 20.0), (10.0, 60.0))
+    assert lines["right_post"] == ((30.0, 20.0), (30.0, 60.0))
 
 
 def test_dilate_line_mask_marks_pixels_around_vertical_line() -> None:

@@ -9,6 +9,7 @@ STANDALONE_LAUNCH_PATH = PACKAGE_ROOT / "launch" / "roi_lidar_corner.launch.py"
 GENERATOR_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_generator_node.py"
 SOLVER_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "corner_lidar_solver_node.py"
 DEBUG_MARKERS_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_lidar_debug_markers.py"
+CONFIG_PATH = PACKAGE_ROOT / "config" / "roi_lidar_corner.yaml"
 
 
 def _literal_value(node: ast.AST):
@@ -184,3 +185,10 @@ def test_debug_marker_node_declares_launch_defaults() -> None:
     assert defaults["text_scale"] == 0.08
     assert defaults["frame_id_fallback"] == "map"
     assert defaults["use_text"] is True
+
+
+def test_config_keeps_legacy_corner3d_debug_topic_separate_from_front_face_corners() -> None:
+    text = CONFIG_PATH.read_text(encoding="utf-8")
+
+    assert "corner3d_topic: /roi_lidar_corner/corners3d" in text
+    assert "point_output_topic: /roi_lidar_corner/front_face_corners" in text
