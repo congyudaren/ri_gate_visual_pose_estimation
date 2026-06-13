@@ -11,6 +11,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
+            "evaluate_roi_video_stability = roi_lidar_corner.evaluate_roi_video_stability:main",
             "lidar_projection_exposure_capture = roi_lidar_corner.lidar_projection_exposure_capture:main",
             "offline_front_face_validation = roi_lidar_corner.offline_front_face_validation:main",
         ],

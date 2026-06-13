@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+import sys
+
+import pytest
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE_ROOT))
+
+from roi_lidar_corner.evaluate_roi_video_stability import (
+    FrameResult,
+    LineMetrics,
+    ObjectMetrics,
+    summarize_results,
+    write_results_csv,
+)
+
+
+def test_summarize_results_reports_detection_and_delta_metrics() -> None:
+    results = [
+        FrameResult(
+            frame=0,
+            objects=[
+                ObjectMetrics(
+                    conf=0.80,
+                    bbox_xyxy=(10.0, 20.0, 110.0, 220.0),
+                    lines={
+                        "left": LineMetrics(mid_x=10.0, mid_y=120.0, length=200.0),
+                        "top": LineMetrics(mid_x=60.0, mid_y=20.0, length=100.0),
+                    },
+                )
+            ],
+        ),
+        FrameResult(
+            frame=1,
+            objects=[
+                ObjectMetrics(
+                    conf=0.90,
+                    bbox_xyxy=(12.0, 24.0, 112.0, 226.0),
+                    lines={
+                        "left": LineMetrics(mid_x=12.0, mid_y=125.0, length=202.0),
+                        "top": LineMetrics(mid_x=62.0, mid_y=24.0, length=100.0),
+                    },
+                )
+            ],
+        ),
+        FrameResult(frame=2, objects=[]),
+    ]
+
+    summary = summarize_results(results, elapsed_sec=0.5)
+
+    assert summary["frames"] == 3
+    assert summary["detected_frames"] == 2
+    assert summary["missed_frames"] == 1
+    assert summary["multi_object_frames"] == 0
+    assert summary["conf_min"] == pytest.approx(0.80)
+    assert summary["conf_mean"] == pytest.approx(0.85)
+    assert summary["bbox_cx_delta_px"]["mean"] == pytest.approx(2.0)
+    assert summary["bbox_cy_delta_px"]["max"] == pytest.approx(5.0)
+    assert summary["left_len_delta_px"]["mean"] == pytest.approx(2.0)
+    assert summary["top_my_delta_px"]["max"] == pytest.approx(4.0)
+
+
+def test_write_results_csv_includes_bbox_and_structure_columns(tmp_path: Path) -> None:
+    output_path = tmp_path / "roi_stability.csv"
+    results = [
+        FrameResult(
+            frame=4,
+            objects=[
+                ObjectMetrics(
+                    conf=0.95,
+                    bbox_xyxy=(100.0, 40.0, 300.0, 440.0),
+                    lines={
+                        "left": LineMetrics(mid_x=105.0, mid_y=240.0, length=400.0),
+                        "right": LineMetrics(mid_x=295.0, mid_y=240.0, length=400.0),
+                        "top": LineMetrics(mid_x=200.0, mid_y=45.0, length=190.0),
+                    },
+                )
+            ],
+        )
+    ]
+
+    write_results_csv(results, output_path)
+
+    rows = list(csv.DictReader(output_path.open(encoding="utf-8")))
+    assert rows[0]["frame"] == "4"
+    assert rows[0]["objects"] == "1"
+    assert rows[0]["bbox_cx"] == "200.000000"
+    assert rows[0]["left_len"] == "400.000000"
+    assert rows[0]["top_my"] == "45.000000"
