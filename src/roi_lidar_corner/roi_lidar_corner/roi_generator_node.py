@@ -415,6 +415,7 @@ class RoiGeneratorNode(Node):
                 self.get_logger().warn(f"detector inference failed: {exc}")
 
         objects: List[FrontFaceROI] = []
+        use_temporal_prior = self.roi_enable_temporal_prior and len(detections) == 1
         for det_idx, detection in enumerate(detections):
             source = "corner_refined"
             try:
@@ -456,7 +457,7 @@ class RoiGeneratorNode(Node):
                         fallback_count += 1
 
             candidate = self._candidate_from_corners(selected_corners)
-            if self.roi_enable_temporal_prior:
+            if use_temporal_prior:
                 jump_reason = temporal_jump_reason(
                     self.last_valid_candidate,
                     candidate,
@@ -465,7 +466,6 @@ class RoiGeneratorNode(Node):
                 if jump_reason is not None and self.last_valid_corners is not None:
                     selected_corners = list(self.last_valid_corners)
                     source = "temporal_hold"
-                    candidate = self.last_valid_candidate
 
             object_roi = self._build_front_face_roi(
                 header=msg.header,
@@ -477,7 +477,7 @@ class RoiGeneratorNode(Node):
             )
             if object_roi is not None:
                 objects.append(object_roi)
-                if source in {"corner_refined", "bbox_fallback"}:
+                if use_temporal_prior and source in {"corner_refined", "bbox_fallback"}:
                     self.last_valid_candidate = self._candidate_from_corners(selected_corners)
                     self.last_valid_corners = list(selected_corners)
                     self.last_valid_detection = detection

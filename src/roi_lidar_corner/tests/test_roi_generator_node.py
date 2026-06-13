@@ -501,3 +501,120 @@ def test_temporal_prior_rejects_large_structure_jump() -> None:
     top = next(item for item in second.structures if item.structure_label == 2)
     assert top.line_v0 == 80.0
     assert top.line_v1 == 80.0
+
+
+def test_temporal_prior_ignores_multi_detection_frame() -> None:
+    module = _load_generator_module()
+    refinements = [
+        [(100.0, 80.0), (200.0, 80.0), (100.0, 280.0), (200.0, 280.0)],
+        [(300.0, 80.0), (400.0, 80.0), (300.0, 280.0), (400.0, 280.0)],
+        [(500.0, 80.0), (600.0, 80.0), (500.0, 280.0), (600.0, 280.0)],
+    ]
+
+    def refine(*_args, **_kwargs):
+        return refinements.pop(0)
+
+    module.refine_corners_inside_bbox = refine
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": False,
+        "roi_enable_temporal_prior": True,
+        "roi_max_line_jump_px": 40.0,
+    }
+    baseline = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    detections_by_frame = [
+        [baseline],
+        [
+            types.SimpleNamespace(
+                bbox=(290.0, 70.0, 410.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            ),
+            types.SimpleNamespace(
+                bbox=(490.0, 70.0, 610.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            ),
+        ],
+    ]
+
+    def detect(_image):
+        return types.SimpleNamespace(detections=detections_by_frame.pop(0))
+
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(available=True, detect=detect)
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    second_frame = node.publisher.published[-1]
+    assert len(second_frame.objects) == 2
+    assert [
+        {structure.source for structure in obj.structures}
+        for obj in second_frame.objects
+    ] == [{"corner_refined"}, {"corner_refined"}]
+    second_object_top = next(
+        item for item in second_frame.objects[1].structures if item.structure_label == 2
+    )
+    assert second_object_top.line_u0 == 500.0
+    assert second_object_top.line_u1 == 600.0
+    assert second_object_top.line_v0 == 80.0
+    assert second_object_top.line_v1 == 80.0
+
+
+def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
+    module = _load_generator_module()
+    refinements = [
+        [(100.0, 80.0), (200.0, 80.0), (100.0, 280.0), (200.0, 280.0)],
+        [(100.0, 270.0), (200.0, 270.0), (100.0, 274.0), (200.0, 274.0)],
+        [(102.0, 82.0), (202.0, 82.0), (102.0, 282.0), (202.0, 282.0)],
+    ]
+
+    def refine(*_args, **_kwargs):
+        return refinements.pop(0)
+
+    module.refine_corners_inside_bbox = refine
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": False,
+        "roi_enable_temporal_prior": True,
+        "roi_max_line_jump_px": 40.0,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    held = node.publisher.published[-2].objects[0]
+    accepted = node.publisher.published[-1].objects[0]
+    assert {structure.source for structure in held.structures} == {"temporal_hold"}
+    assert {structure.source for structure in accepted.structures} == {"corner_refined"}
+    accepted_top = next(item for item in accepted.structures if item.structure_label == 2)
+    assert accepted_top.line_u0 == 102.0
+    assert accepted_top.line_u1 == 202.0
+    assert accepted_top.line_v0 == 82.0
+    assert accepted_top.line_v1 == 82.0
