@@ -414,6 +414,29 @@ class RoiGeneratorNode(Node):
             except Exception as exc:
                 self.get_logger().warn(f"detector inference failed: {exc}")
 
+        if (
+            not detections
+            and self.roi_enable_temporal_prior
+            and self.last_valid_corners is not None
+            and self.last_valid_detection is not None
+            and self.missed_detection_frames < self.roi_temporal_hold_frames
+        ):
+            self.missed_detection_frames += 1
+            held_roi = self._build_front_face_roi(
+                header=msg.header,
+                object_id=0,
+                detection=self.last_valid_detection,
+                corners=self.last_valid_corners,
+                image_shape=cv_image.shape,
+                source="temporal_hold",
+            )
+            objects = [held_roi] if held_roi is not None else []
+            out = FrontFaceROIArray()
+            out.header = msg.header
+            out.objects = objects
+            self.publisher.publish(out)
+            return
+
         objects: List[FrontFaceROI] = []
         use_temporal_prior = self.roi_enable_temporal_prior and len(detections) == 1
         if self.roi_enable_temporal_prior and len(detections) > 1:

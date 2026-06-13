@@ -683,7 +683,9 @@ def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> 
     node.image_callback(image_msg)
     node.image_callback(image_msg)
 
-    assert node.publisher.published[-1].objects == []
+    held = node.publisher.published[-1].objects
+    assert len(held) == 1
+    assert {structure.source for structure in held[0].structures} == {"temporal_hold"}
     assert node.last_valid_candidate is not None
     assert node.last_valid_corners == [
         (100.0, 80.0),
@@ -740,3 +742,75 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
     assert accepted_top.line_u1 == 202.0
     assert accepted_top.line_v0 == 82.0
     assert accepted_top.line_v1 == 82.0
+
+
+def test_short_detector_miss_holds_previous_roi() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+        (100.0, 80.0),
+        (200.0, 80.0),
+        (100.0, 280.0),
+        (200.0, 280.0),
+    ]
+    detections = [
+        [types.SimpleNamespace(bbox=(90.0, 70.0, 210.0, 290.0), class_id=3, conf=0.9, class_name="gate")],
+        [],
+    ]
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": True,
+        "roi_temporal_hold_frames": 2,
+    }
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=detections.pop(0)),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    held = node.publisher.published[-1]
+    assert len(held.objects) == 1
+    assert {structure.source for structure in held.objects[0].structures} == {"temporal_hold"}
+
+
+def test_long_detector_miss_clears_output() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+        (100.0, 80.0),
+        (200.0, 80.0),
+        (100.0, 280.0),
+        (200.0, 280.0),
+    ]
+    first_detection = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    detections = [[first_detection], [], []]
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": True,
+        "roi_temporal_hold_frames": 1,
+    }
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=detections.pop(0)),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    assert node.publisher.published[-1].objects == []
