@@ -2,6 +2,7 @@ build/
 install/
 log/
 analysis_artifacts/
+analysis_artifacts
 __pycache__/
 .pytest_cache/
 *.pyc
