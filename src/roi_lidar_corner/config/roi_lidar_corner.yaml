@@ -22,6 +22,14 @@ roi_generator_node:
     neo_max_line_gap: 50
     neo_blur_kernel_size: 5
     neo_border_ratio: 0.15
+    roi_enable_geometry_prior: true
+    roi_enable_temporal_prior: true
+    roi_temporal_hold_frames: 5
+    roi_max_line_jump_px: 80.0
+    roi_min_post_bbox_height_ratio: 0.45
+    roi_expected_top_post_ratio: 0.5
+    roi_top_post_ratio_tolerance: 0.25
+    roi_border_relax_px: 8.0
 
 corner_lidar_solver_node:
   ros__parameters:

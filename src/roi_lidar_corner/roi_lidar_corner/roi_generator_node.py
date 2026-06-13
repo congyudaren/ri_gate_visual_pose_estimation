@@ -30,6 +30,13 @@ from roi_lidar_corner.msg import (
     StructureROI,
 )
 from rotor_swarm_msgs.msg import FrontFaceCorners
+from roi_lidar_corner.roi_geometry_prior import (
+    GeometryPriorConfig,
+    StructureCandidate,
+    TemporalPriorConfig,
+    build_bbox_corners,
+    validate_structure_candidate,
+)
 from roi_lidar_corner.neo_roi_refiner import refine_corners_inside_bbox
 from roi_lidar_corner.structure_roi_builder import build_structure_lines, dilate_line_mask
 
@@ -189,6 +196,14 @@ class RoiGeneratorNode(Node):
         self.declare_parameter("neo_max_line_gap", 50)
         self.declare_parameter("neo_blur_kernel_size", 5)
         self.declare_parameter("neo_border_ratio", 0.15)
+        self.declare_parameter("roi_enable_geometry_prior", True)
+        self.declare_parameter("roi_enable_temporal_prior", True)
+        self.declare_parameter("roi_temporal_hold_frames", 5)
+        self.declare_parameter("roi_max_line_jump_px", 80.0)
+        self.declare_parameter("roi_min_post_bbox_height_ratio", 0.45)
+        self.declare_parameter("roi_expected_top_post_ratio", 0.5)
+        self.declare_parameter("roi_top_post_ratio_tolerance", 0.25)
+        self.declare_parameter("roi_border_relax_px", 8.0)
 
         image_topic = self.get_parameter("image_topic").get_parameter_value().string_value
         self.roi_output_topic = self.get_parameter("roi_output_topic").get_parameter_value().string_value
@@ -236,6 +251,34 @@ class RoiGeneratorNode(Node):
             self.get_parameter("neo_blur_kernel_size").get_parameter_value().integer_value
         )
         self.neo_border_ratio = float(self.get_parameter("neo_border_ratio").get_parameter_value().double_value)
+        self.roi_enable_geometry_prior = (
+            self.get_parameter("roi_enable_geometry_prior").get_parameter_value().bool_value
+        )
+        self.roi_enable_temporal_prior = (
+            self.get_parameter("roi_enable_temporal_prior").get_parameter_value().bool_value
+        )
+        self.roi_temporal_hold_frames = int(
+            self.get_parameter("roi_temporal_hold_frames").get_parameter_value().integer_value
+        )
+        self.geometry_prior_config = GeometryPriorConfig(
+            min_post_bbox_height_ratio=float(
+                self.get_parameter("roi_min_post_bbox_height_ratio").get_parameter_value().double_value
+            ),
+            expected_top_post_ratio=float(
+                self.get_parameter("roi_expected_top_post_ratio").get_parameter_value().double_value
+            ),
+            top_post_ratio_tolerance=float(
+                self.get_parameter("roi_top_post_ratio_tolerance").get_parameter_value().double_value
+            ),
+            border_relax_px=float(self.get_parameter("roi_border_relax_px").get_parameter_value().double_value),
+        )
+        self.temporal_prior_config = TemporalPriorConfig(
+            max_line_jump_px=float(self.get_parameter("roi_max_line_jump_px").get_parameter_value().double_value)
+        )
+        self.last_valid_candidate = None
+        self.last_valid_corners = None
+        self.last_valid_detection = None
+        self.missed_detection_frames = 0
         self.debug_log_every_n_frames = 30
         self.frame_counter = 0
 
@@ -372,6 +415,7 @@ class RoiGeneratorNode(Node):
 
         objects: List[FrontFaceROI] = []
         for det_idx, detection in enumerate(detections):
+            source = "corner_refined"
             try:
                 corners = refine_corners_inside_bbox(
                     cv_image,
@@ -387,20 +431,36 @@ class RoiGeneratorNode(Node):
                 )
             except Exception as exc:
                 self.get_logger().warn(f"neo refine failed, fallback to bbox corners: {exc}")
-                x1, y1, x2, y2 = detection.bbox
-                corners = [
-                    (float(x1), float(y1)),
-                    (float(x2), float(y1)),
-                    (float(x1), float(y2)),
-                    (float(x2), float(y2)),
-                ]
+                corners = build_bbox_corners(detection.bbox)
+                source = "bbox_fallback"
                 fallback_count += 1
+
+            bbox_corners = build_bbox_corners(detection.bbox)
+            selected_corners = list(corners[:4])
+            while len(selected_corners) < 4:
+                selected_corners.append(bbox_corners[len(selected_corners)])
+
+            if self.roi_enable_geometry_prior:
+                candidate = self._candidate_from_corners(selected_corners)
+                validation = validate_structure_candidate(
+                    candidate,
+                    bbox=detection.bbox,
+                    image_shape=cv_image.shape[:2],
+                    config=self.geometry_prior_config,
+                )
+                if not validation.valid:
+                    selected_corners = bbox_corners
+                    if source != "bbox_fallback":
+                        source = "bbox_fallback"
+                        fallback_count += 1
+
             object_roi = self._build_front_face_roi(
                 header=msg.header,
                 object_id=det_idx,
                 detection=detection,
-                corners=corners,
+                corners=selected_corners,
                 image_shape=cv_image.shape,
+                source=source,
             )
             if object_roi is not None:
                 objects.append(object_roi)
@@ -490,6 +550,15 @@ class RoiGeneratorNode(Node):
             source=source,
         )
         return obj
+
+    def _candidate_from_corners(self, corners: Sequence[Tuple[float, float]]) -> StructureCandidate:
+        corners_by_label = {
+            "TL": tuple(corners[0]),
+            "TR": tuple(corners[1]),
+            "BL": tuple(corners[2]),
+            "BR": tuple(corners[3]),
+        }
+        return StructureCandidate(lines=build_structure_lines(corners_by_label))
 
     def _build_structure_rois(
         self,

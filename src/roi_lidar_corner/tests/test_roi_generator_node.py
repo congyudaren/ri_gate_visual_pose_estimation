@@ -422,3 +422,40 @@ def test_build_front_face_roi_marks_structure_source() -> None:
 
     assert roi is not None
     assert {structure.source for structure in roi.structures} == {"bbox_fallback"}
+
+
+def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+        (10.0, 20.0),
+        (110.0, 20.0),
+        (10.0, 24.0),
+        (110.0, 220.0),
+    ]
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"bbox_fallback"}
+    left = next(item for item in structures if item.structure_label == 0)
+    assert left.line_v0 == 20.0
+    assert left.line_v1 == 220.0
