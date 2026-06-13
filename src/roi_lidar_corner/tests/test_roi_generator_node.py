@@ -399,3 +399,26 @@ def test_corner3d_detail_text_uses_corner_freshness_without_solver_debug_freshne
 
     assert any("xyz=(1.25, 2.50, 3.75)" in text for text in module.cv2.put_text_calls)
     assert not any("xyz=(?, ?, ?)" in text for text in module.cv2.put_text_calls)
+
+
+def test_build_front_face_roi_marks_structure_source() -> None:
+    module = _load_generator_module()
+    node = module.RoiGeneratorNode()
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+
+    roi = node._build_front_face_roi(
+        header=module.Header(),
+        object_id=0,
+        detection=detection,
+        corners=[(10.0, 20.0), (110.0, 20.0), (10.0, 220.0), (110.0, 220.0)],
+        image_shape=(480, 640, 3),
+        source="bbox_fallback",
+    )
+
+    assert roi is not None
+    assert {structure.source for structure in roi.structures} == {"bbox_fallback"}

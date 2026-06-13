@@ -460,6 +460,7 @@ class RoiGeneratorNode(Node):
         detection: Detection,
         corners: Sequence[Tuple[float, float]],
         image_shape: Tuple[int, int, int],
+        source: str = "corner_refined",
     ) -> Optional[FrontFaceROI]:
         obj = FrontFaceROI()
         obj.header = header
@@ -486,6 +487,7 @@ class RoiGeneratorNode(Node):
             detection=detection,
             corners=ordered_corners,
             image_shape=image_shape,
+            source=source,
         )
         return obj
 
@@ -496,6 +498,7 @@ class RoiGeneratorNode(Node):
         detection: Detection,
         corners: Sequence[Tuple[float, float]],
         image_shape: Tuple[int, int, int],
+        source: str = "corner_refined",
     ) -> List[StructureROI]:
         corners_by_label = {
             "TL": tuple(corners[0]),
@@ -537,7 +540,7 @@ class RoiGeneratorNode(Node):
             msg.line_v1 = float(end[1])
             msg.valid = True
             msg.structure_conf = float(detection.conf)
-            msg.source = "corner_refined"
+            msg.source = str(source)
             structures.append(msg)
 
         return structures
