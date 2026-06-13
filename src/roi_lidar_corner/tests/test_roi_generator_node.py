@@ -635,6 +635,9 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
 
     node.image_callback(image_msg)
     node.image_callback(image_msg)
+    assert node.last_valid_candidate is None
+    assert node.last_valid_corners is None
+    assert node.last_valid_detection is None
     node.image_callback(image_msg)
 
     third = node.publisher.published[-1].objects[0]
@@ -644,6 +647,51 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
     assert top.line_u1 == 620.0
     assert top.line_v0 == 80.0
     assert top.line_v1 == 80.0
+
+
+def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+        (100.0, 80.0),
+        (200.0, 80.0),
+        (100.0, 280.0),
+        (200.0, 280.0),
+    ]
+    detection = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    detections_by_frame = [[detection], []]
+
+    def detect(_image):
+        return types.SimpleNamespace(detections=detections_by_frame.pop(0))
+
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": False,
+        "roi_enable_temporal_prior": True,
+        "roi_max_line_jump_px": 40.0,
+    }
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(available=True, detect=detect)
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    assert node.publisher.published[-1].objects == []
+    assert node.last_valid_candidate is not None
+    assert node.last_valid_corners == [
+        (100.0, 80.0),
+        (200.0, 80.0),
+        (100.0, 280.0),
+        (200.0, 280.0),
+    ]
+    assert node.last_valid_detection is detection
 
 
 def test_temporal_hold_does_not_update_last_valid_candidate() -> None:

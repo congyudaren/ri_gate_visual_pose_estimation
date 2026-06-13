@@ -416,7 +416,7 @@ class RoiGeneratorNode(Node):
 
         objects: List[FrontFaceROI] = []
         use_temporal_prior = self.roi_enable_temporal_prior and len(detections) == 1
-        if self.roi_enable_temporal_prior and len(detections) != 1:
+        if self.roi_enable_temporal_prior and len(detections) > 1:
             self._clear_temporal_prior_state()
         for det_idx, detection in enumerate(detections):
             source = "corner_refined"
