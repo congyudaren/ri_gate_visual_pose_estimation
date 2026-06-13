@@ -13,6 +13,7 @@ from roi_lidar_corner.evaluate_roi_video_stability import (
     FrameResult,
     LineMetrics,
     ObjectMetrics,
+    render_annotated_frame,
     summarize_results,
     write_results_csv,
 )
@@ -90,3 +91,45 @@ def test_write_results_csv_includes_bbox_and_structure_columns(tmp_path: Path) -
     assert rows[0]["bbox_cx"] == "200.000000"
     assert rows[0]["left_len"] == "400.000000"
     assert rows[0]["top_my"] == "45.000000"
+
+
+def test_render_annotated_frame_draws_bbox_and_structure_lines() -> None:
+    import numpy as np
+
+    image = np.zeros((120, 160, 3), dtype=np.uint8)
+    result = FrameResult(
+        frame=7,
+        objects=[
+            ObjectMetrics(
+                conf=0.95,
+                bbox_xyxy=(20.0, 10.0, 120.0, 100.0),
+                lines={
+                    "left": LineMetrics(
+                        mid_x=25.0,
+                        mid_y=55.0,
+                        length=90.0,
+                        u0=25.0,
+                        v0=10.0,
+                        u1=25.0,
+                        v1=100.0,
+                    ),
+                    "top": LineMetrics(
+                        mid_x=70.0,
+                        mid_y=12.0,
+                        length=90.0,
+                        u0=25.0,
+                        v0=12.0,
+                        u1=115.0,
+                        v1=12.0,
+                    ),
+                },
+            )
+        ],
+    )
+
+    annotated = render_annotated_frame(image, result)
+
+    assert annotated.shape == image.shape
+    assert np.any(annotated != image)
+    assert annotated[10, 20].any()
+    assert annotated[55, 25].any()

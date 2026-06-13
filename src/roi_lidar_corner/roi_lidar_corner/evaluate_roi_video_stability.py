@@ -45,6 +45,10 @@ class LineMetrics:
     mid_x: float
     mid_y: float
     length: float
+    u0: Optional[float] = None
+    v0: Optional[float] = None
+    u1: Optional[float] = None
+    v1: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +173,99 @@ def write_results_csv(results: Sequence[FrameResult], output_path: Path) -> None
         writer.writeheader()
         for result in results:
             writer.writerow(_object_to_row(result))
+
+
+def _point(x: float, y: float) -> Tuple[int, int]:
+    return (int(round(float(x))), int(round(float(y))))
+
+
+def _line_endpoints(name: str, line: LineMetrics) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    if None not in (line.u0, line.v0, line.u1, line.v1):
+        return _point(line.u0, line.v0), _point(line.u1, line.v1)
+    half = float(line.length) * 0.5
+    if name in {"left", "right"}:
+        return _point(line.mid_x, line.mid_y - half), _point(line.mid_x, line.mid_y + half)
+    return _point(line.mid_x - half, line.mid_y), _point(line.mid_x + half, line.mid_y)
+
+
+def render_annotated_frame(image, result: FrameResult):
+    import cv2
+
+    annotated = image.copy()
+    palette = {
+        "left": (0, 255, 255),
+        "right": (255, 255, 0),
+        "top": (0, 255, 0),
+    }
+    cv2.putText(
+        annotated,
+        f"frame={result.frame} objects={len(result.objects)}",
+        (12, 26),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    if not result.objects:
+        cv2.putText(
+            annotated,
+            "MISS",
+            (12, 58),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 0, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        return annotated
+
+    for object_index, obj in enumerate(result.objects):
+        x1, y1, x2, y2 = obj.bbox_xyxy
+        cv2.rectangle(annotated, _point(x1, y1), _point(x2, y2), (255, 0, 0), 2)
+        cv2.putText(
+            annotated,
+            f"id={object_index} conf={obj.conf:.2f}",
+            _point(x1, max(16.0, y1 - 6.0)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 0, 0),
+            2,
+            cv2.LINE_AA,
+        )
+        for name, line in obj.lines.items():
+            color = palette.get(name, (255, 255, 255))
+            start, end = _line_endpoints(name, line)
+            cv2.line(annotated, start, end, color, 3, cv2.LINE_AA)
+            cv2.circle(annotated, _point(line.mid_x, line.mid_y), 4, color, -1)
+            cv2.putText(
+                annotated,
+                f"{name}:{line.length:.0f}px",
+                _point(line.mid_x + 6.0, line.mid_y - 6.0),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+    return annotated
+
+
+def _open_video_writer(path: Path, fps: float, width: int, height: int):
+    import cv2
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for fourcc_name in ("mp4v", "avc1", "XVID"):
+        writer = cv2.VideoWriter(
+            str(path),
+            cv2.VideoWriter_fourcc(*fourcc_name),
+            float(fps),
+            (int(width), int(height)),
+        )
+        if writer.isOpened():
+            return writer
+        writer.release()
+    raise RuntimeError(f"failed to open output video writer: {path}")
 
 
 def _install_module(name: str, module: types.ModuleType) -> None:
@@ -373,6 +470,10 @@ def _line_metrics(structure) -> LineMetrics:
         mid_x=(u0 + u1) / 2.0,
         mid_y=(v0 + v1) / 2.0,
         length=float(((u1 - u0) ** 2 + (v1 - v0) ** 2) ** 0.5),
+        u0=u0,
+        v0=v0,
+        u1=u1,
+        v1=v1,
     )
 
 
@@ -399,6 +500,7 @@ def evaluate_video(
     iou_threshold: float,
     input_size: int,
     class_filter: str,
+    output_video_path: Optional[Path] = None,
 ) -> Tuple[List[FrameResult], float]:
     import cv2
 
@@ -427,6 +529,7 @@ def evaluate_video(
     fps = float(fps) if fps and fps > 0.0 else 15.0
     results: List[FrameResult] = []
     frame_index = 0
+    writer = None
     start = time.monotonic()
     try:
         while True:
@@ -447,14 +550,20 @@ def evaluate_video(
             if len(node.publisher.published) != before + 1:
                 raise RuntimeError(f"frame {frame_index}: ROI callback did not publish exactly one message")
             output = node.publisher.published[-1]
-            results.append(
-                FrameResult(
-                    frame=frame_index,
-                    objects=[_object_metrics(obj) for obj in output.objects],
-                )
+            result = FrameResult(
+                frame=frame_index,
+                objects=[_object_metrics(obj) for obj in output.objects],
             )
+            results.append(result)
+            if output_video_path is not None:
+                if writer is None:
+                    height, width = image.shape[:2]
+                    writer = _open_video_writer(output_video_path, fps, width, height)
+                writer.write(render_annotated_frame(image, result))
             frame_index += 1
     finally:
+        if writer is not None:
+            writer.release()
         capture.release()
     return results, time.monotonic() - start
 
@@ -465,6 +574,10 @@ def _default_package_root() -> Path:
 
 def _default_output_path(video_path: Path) -> Path:
     return video_path.with_name(f"{video_path.stem}_roi_stability.csv")
+
+
+def _default_video_output_path(video_path: Path) -> Path:
+    return video_path.with_name(f"{video_path.stem}_roi_stability_annotated.mp4")
 
 
 def _print_delta(name: str, value: object) -> None:
@@ -518,6 +631,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("video", type=Path, help="Input video path.")
     parser.add_argument("--output-csv", type=Path, default=None, help="CSV output path.")
+    parser.add_argument(
+        "--output-video",
+        type=Path,
+        default=None,
+        help="Optional annotated MP4 path for visual ROI review.",
+    )
+    parser.add_argument(
+        "--auto-output-video",
+        action="store_true",
+        help="Write an annotated review video beside the input video.",
+    )
     parser.add_argument("--package-root", type=Path, default=package_root)
     parser.add_argument("--model", type=Path, default=package_root / "models" / "best.pt")
     parser.add_argument("--names", type=Path, default=package_root / "models" / "detect.names")
@@ -535,6 +659,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     video_path = args.video.expanduser().resolve()
     output_csv = args.output_csv.expanduser().resolve() if args.output_csv else _default_output_path(video_path)
+    output_video = None
+    if args.output_video is not None:
+        output_video = args.output_video.expanduser().resolve()
+    elif args.auto_output_video:
+        output_video = _default_video_output_path(video_path).resolve()
     results, elapsed_sec = evaluate_video(
         video_path=video_path,
         package_root=args.package_root.expanduser().resolve(),
@@ -546,9 +675,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         iou_threshold=args.iou_threshold,
         input_size=args.input_size,
         class_filter=args.class_filter,
+        output_video_path=output_video,
     )
     write_results_csv(results, output_csv)
     print_summary(summarize_results(results, elapsed_sec), output_csv)
+    if output_video is not None:
+        print(f"video={output_video}")
     return 0
 
 
