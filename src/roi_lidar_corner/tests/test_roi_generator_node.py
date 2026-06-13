@@ -459,3 +459,45 @@ def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
     left = next(item for item in structures if item.structure_label == 0)
     assert left.line_v0 == 20.0
     assert left.line_v1 == 220.0
+
+
+def test_temporal_prior_rejects_large_structure_jump() -> None:
+    module = _load_generator_module()
+    refinements = [
+        [(100.0, 80.0), (200.0, 80.0), (100.0, 280.0), (200.0, 280.0)],
+        [(100.0, 270.0), (200.0, 270.0), (100.0, 274.0), (200.0, 274.0)],
+    ]
+
+    def refine(*_args, **_kwargs):
+        return refinements.pop(0)
+
+    module.refine_corners_inside_bbox = refine
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": False,
+        "roi_enable_temporal_prior": True,
+        "roi_max_line_jump_px": 40.0,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    second = node.publisher.published[-1].objects[0]
+    assert {structure.source for structure in second.structures} == {"temporal_hold"}
+    top = next(item for item in second.structures if item.structure_label == 2)
+    assert top.line_v0 == 80.0
+    assert top.line_v1 == 80.0

@@ -35,6 +35,7 @@ from roi_lidar_corner.roi_geometry_prior import (
     StructureCandidate,
     TemporalPriorConfig,
     build_bbox_corners,
+    temporal_jump_reason,
     validate_structure_candidate,
 )
 from roi_lidar_corner.neo_roi_refiner import refine_corners_inside_bbox
@@ -454,6 +455,18 @@ class RoiGeneratorNode(Node):
                         source = "bbox_fallback"
                         fallback_count += 1
 
+            candidate = self._candidate_from_corners(selected_corners)
+            if self.roi_enable_temporal_prior:
+                jump_reason = temporal_jump_reason(
+                    self.last_valid_candidate,
+                    candidate,
+                    self.temporal_prior_config,
+                )
+                if jump_reason is not None and self.last_valid_corners is not None:
+                    selected_corners = list(self.last_valid_corners)
+                    source = "temporal_hold"
+                    candidate = self.last_valid_candidate
+
             object_roi = self._build_front_face_roi(
                 header=msg.header,
                 object_id=det_idx,
@@ -464,6 +477,11 @@ class RoiGeneratorNode(Node):
             )
             if object_roi is not None:
                 objects.append(object_roi)
+                if source in {"corner_refined", "bbox_fallback"}:
+                    self.last_valid_candidate = self._candidate_from_corners(selected_corners)
+                    self.last_valid_corners = list(selected_corners)
+                    self.last_valid_detection = detection
+                    self.missed_detection_frames = 0
 
         out = FrontFaceROIArray()
         out.header = msg.header
