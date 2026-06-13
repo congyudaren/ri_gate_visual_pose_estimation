@@ -572,6 +572,80 @@ def test_temporal_prior_ignores_multi_detection_frame() -> None:
     assert second_object_top.line_v1 == 80.0
 
 
+def test_multi_detection_frame_clears_temporal_prior_state() -> None:
+    module = _load_generator_module()
+    refinements = [
+        [(100.0, 80.0), (200.0, 80.0), (100.0, 280.0), (200.0, 280.0)],
+        [(300.0, 80.0), (400.0, 80.0), (300.0, 280.0), (400.0, 280.0)],
+        [(500.0, 80.0), (600.0, 80.0), (500.0, 280.0), (600.0, 280.0)],
+        [(520.0, 80.0), (620.0, 80.0), (520.0, 280.0), (620.0, 280.0)],
+    ]
+
+    def refine(*_args, **_kwargs):
+        return refinements.pop(0)
+
+    module.refine_corners_inside_bbox = refine
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": False,
+        "roi_enable_temporal_prior": True,
+        "roi_max_line_jump_px": 40.0,
+    }
+    detections_by_frame = [
+        [
+            types.SimpleNamespace(
+                bbox=(90.0, 70.0, 210.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            )
+        ],
+        [
+            types.SimpleNamespace(
+                bbox=(290.0, 70.0, 410.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            ),
+            types.SimpleNamespace(
+                bbox=(490.0, 70.0, 610.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            ),
+        ],
+        [
+            types.SimpleNamespace(
+                bbox=(510.0, 70.0, 630.0, 290.0),
+                class_id=3,
+                conf=0.9,
+                class_name="gate",
+            )
+        ],
+    ]
+
+    def detect(_image):
+        return types.SimpleNamespace(detections=detections_by_frame.pop(0))
+
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(available=True, detect=detect)
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    third = node.publisher.published[-1].objects[0]
+    assert {structure.source for structure in third.structures} == {"corner_refined"}
+    top = next(item for item in third.structures if item.structure_label == 2)
+    assert top.line_u0 == 520.0
+    assert top.line_u1 == 620.0
+    assert top.line_v0 == 80.0
+    assert top.line_v1 == 80.0
+
+
 def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
     module = _load_generator_module()
     refinements = [

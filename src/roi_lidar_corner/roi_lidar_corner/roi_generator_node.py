@@ -416,6 +416,8 @@ class RoiGeneratorNode(Node):
 
         objects: List[FrontFaceROI] = []
         use_temporal_prior = self.roi_enable_temporal_prior and len(detections) == 1
+        if self.roi_enable_temporal_prior and len(detections) != 1:
+            self._clear_temporal_prior_state()
         for det_idx, detection in enumerate(detections):
             source = "corner_refined"
             try:
@@ -568,6 +570,12 @@ class RoiGeneratorNode(Node):
             source=source,
         )
         return obj
+
+    def _clear_temporal_prior_state(self) -> None:
+        self.last_valid_candidate = None
+        self.last_valid_corners = None
+        self.last_valid_detection = None
+        self.missed_detection_frames = 0
 
     def _candidate_from_corners(self, corners: Sequence[Tuple[float, float]]) -> StructureCandidate:
         corners_by_label = {
