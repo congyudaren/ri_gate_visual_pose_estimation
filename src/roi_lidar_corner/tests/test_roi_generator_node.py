@@ -777,6 +777,7 @@ def test_short_detector_miss_holds_previous_roi() -> None:
     held = node.publisher.published[-1]
     assert len(held.objects) == 1
     assert {structure.source for structure in held.objects[0].structures} == {"temporal_hold"}
+    assert node.missed_detection_frames == 1
 
 
 def test_long_detector_miss_clears_output() -> None:
@@ -814,3 +815,6 @@ def test_long_detector_miss_clears_output() -> None:
     node.image_callback(image_msg)
 
     assert node.publisher.published[-1].objects == []
+    assert node.last_valid_candidate is None
+    assert node.last_valid_corners is None
+    assert node.last_valid_detection is None

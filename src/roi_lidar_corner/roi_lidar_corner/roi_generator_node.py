@@ -437,6 +437,9 @@ class RoiGeneratorNode(Node):
             self.publisher.publish(out)
             return
 
+        if not detections and self.roi_enable_temporal_prior:
+            self._clear_temporal_prior_state()
+
         objects: List[FrontFaceROI] = []
         use_temporal_prior = self.roi_enable_temporal_prior and len(detections) == 1
         if self.roi_enable_temporal_prior and len(detections) > 1:
