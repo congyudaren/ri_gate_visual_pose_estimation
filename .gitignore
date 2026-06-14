@@ -12,3 +12,4 @@ __pycache__/
 .idea/
 .vscode/
 src/.vscode/
+docs/superpowers/specs/2026-06-14-roi-inverted-camera-semantics-handoff.md
