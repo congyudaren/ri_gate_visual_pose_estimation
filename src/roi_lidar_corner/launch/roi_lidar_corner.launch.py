@@ -50,6 +50,11 @@ def generate_launch_description() -> LaunchDescription:
     neo_max_line_gap_arg = _arg("neo_max_line_gap", "50", "[ROI] ROI 细化允许的最大 Hough 直线间隙。")
     neo_blur_kernel_size_arg = _arg("neo_blur_kernel_size", "5", "[ROI] 边缘提取前的模糊核尺寸。")
     neo_border_ratio_arg = _arg("neo_border_ratio", "0.15", "[ROI] ROI 几何细化使用的边界比例。")
+    structure_semantics_arg = _arg(
+        "structure_semantics",
+        "inverted_camera",
+        "[ROI] 结构标签语义：normal 使用图像上边作为 TOP_BEAM，inverted_camera 使用图像下边作为物理 TOP_BEAM。",
+    )
 
     # 调试输出开关：启用可选图像叠加、UV 诊断和 RViz marker，
     # 不改变核心 ROI/角点输出。
@@ -143,6 +148,7 @@ def generate_launch_description() -> LaunchDescription:
     neo_max_line_gap = LaunchConfiguration("neo_max_line_gap")
     neo_blur_kernel_size = LaunchConfiguration("neo_blur_kernel_size")
     neo_border_ratio = LaunchConfiguration("neo_border_ratio")
+    structure_semantics = LaunchConfiguration("structure_semantics")
 
     # 调试输出开关。
     publish_debug_image = LaunchConfiguration("publish_debug_image")
@@ -228,6 +234,7 @@ def generate_launch_description() -> LaunchDescription:
                 "neo_max_line_gap": neo_max_line_gap,
                 "neo_blur_kernel_size": neo_blur_kernel_size,
                 "neo_border_ratio": neo_border_ratio,
+                "structure_semantics": structure_semantics,
             }
         ],
     )
@@ -268,6 +275,7 @@ def generate_launch_description() -> LaunchDescription:
                 "corner_target_frames": corner_target_frames,
                 "corner_cap_points": corner_cap_points,
                 "post_max_z_jump_m": post_max_z_jump_m,
+                "structure_semantics": structure_semantics,
                 # 输出坐标系变换。
                 "output_frame_id": output_frame_id,
                 "output_extrinsic_t_x": output_extrinsic_t_x,
@@ -336,6 +344,7 @@ def generate_launch_description() -> LaunchDescription:
             neo_max_line_gap_arg,
             neo_blur_kernel_size_arg,
             neo_border_ratio_arg,
+            structure_semantics_arg,
 
             # 调试输出开关。
             publish_debug_image_arg,

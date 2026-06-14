@@ -345,6 +345,7 @@ def test_publishes_structure_rois_from_refined_corners() -> None:
         (10.0, 60.0),
         (30.0, 60.0),
     ])
+    module.Node.parameter_overrides = {"structure_semantics": "normal"}
 
     detection = types.SimpleNamespace(
         bbox=(10.0, 20.0, 30.0, 60.0),
@@ -371,6 +372,106 @@ def test_publishes_structure_rois_from_refined_corners() -> None:
     assert structures[2].line_v1 == 20.0
     assert structures[2].mask_width > 0
     assert structures[2].mask_height > 0
+
+
+def test_inverted_camera_structure_semantics_publish_bottom_image_edge_as_top_beam() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (10.0, 20.0),
+        (30.0, 20.0),
+        (10.0, 60.0),
+        (30.0, 60.0),
+    ])
+    module.Node.parameter_overrides = {"structure_semantics": "inverted_camera"}
+
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 30.0, 60.0),
+        class_id=3,
+        conf=0.9,
+        class_name="frame",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((80, 80, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    top = next(
+        item
+        for item in node.publisher.published[-1].objects[0].structures
+        if item.structure_label == module.StructureROI.TOP_BEAM
+    )
+    assert top.line_v0 == 60.0
+    assert top.line_v1 == 60.0
+
+
+def test_inverted_camera_structure_semantics_publish_body_left_on_image_right() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (10.0, 20.0),
+        (30.0, 20.0),
+        (10.0, 60.0),
+        (30.0, 60.0),
+    ])
+    module.Node.parameter_overrides = {"structure_semantics": "inverted_camera"}
+
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 30.0, 60.0),
+        class_id=3,
+        conf=0.9,
+        class_name="frame",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((80, 80, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    left = next(item for item in structures if item.structure_label == module.StructureROI.LEFT_POST)
+    right = next(item for item in structures if item.structure_label == module.StructureROI.RIGHT_POST)
+    assert left.line_u0 == 30.0
+    assert left.line_u1 == 30.0
+    assert right.line_u0 == 10.0
+    assert right.line_u1 == 10.0
+
+
+def test_inverted_camera_debug_overlay_draws_top_beam_on_bottom_image_edge() -> None:
+    module = _load_generator_module()
+    module.Node.parameter_overrides = {"structure_semantics": "inverted_camera"}
+    node = module.RoiGeneratorNode()
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 30.0, 60.0),
+        class_id=3,
+        conf=0.9,
+        class_name="frame",
+    )
+    roi = node._build_front_face_roi(
+        header=module.Header(),
+        object_id=0,
+        detection=detection,
+        corners=[(10.0, 20.0), (30.0, 20.0), (10.0, 60.0), (30.0, 60.0)],
+        image_shape=(80, 80, 3),
+        source="corner_refined",
+    )
+    image = np.zeros((80, 80, 3), dtype=np.uint8)
+
+    node._draw_structure_rois(image, roi)
+
+    assert tuple(image[60, 20].tolist()) == (0, 255, 255)
+    assert tuple(image[20, 20].tolist()) != (0, 255, 255)
 
 
 def test_corner3d_detail_text_uses_corner_freshness_without_solver_debug_freshness() -> None:
@@ -451,6 +552,7 @@ def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": False,
+        "structure_semantics": "normal",
     }
     detection = types.SimpleNamespace(
         bbox=(10.0, 20.0, 110.0, 220.0),
@@ -492,6 +594,7 @@ def test_temporal_prior_rejects_large_structure_jump() -> None:
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
+        "structure_semantics": "normal",
     }
     detection = types.SimpleNamespace(
         bbox=(90.0, 70.0, 210.0, 290.0),
@@ -535,6 +638,7 @@ def test_temporal_prior_ignores_multi_detection_frame() -> None:
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
+        "structure_semantics": "normal",
     }
     baseline = types.SimpleNamespace(
         bbox=(90.0, 70.0, 210.0, 290.0),
@@ -605,6 +709,7 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
+        "structure_semantics": "normal",
     }
     detections_by_frame = [
         [
@@ -688,6 +793,7 @@ def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> 
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
+        "structure_semantics": "normal",
     }
     node = module.RoiGeneratorNode()
     node.detector = types.SimpleNamespace(available=True, detect=detect)
@@ -728,6 +834,7 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
+        "structure_semantics": "normal",
     }
     detection = types.SimpleNamespace(
         bbox=(90.0, 70.0, 210.0, 290.0),
@@ -776,6 +883,7 @@ def test_short_detector_miss_holds_previous_roi() -> None:
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": True,
         "roi_temporal_hold_frames": 2,
+        "structure_semantics": "normal",
     }
     node = module.RoiGeneratorNode()
     node.detector = types.SimpleNamespace(
@@ -818,6 +926,7 @@ def test_temporal_hold_does_not_stabilize_bbox_fallback() -> None:
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": True,
         "roi_temporal_hold_frames": 2,
+        "structure_semantics": "normal",
     }
     node = module.RoiGeneratorNode()
     node.detector = types.SimpleNamespace(
@@ -859,6 +968,7 @@ def test_long_detector_miss_clears_output() -> None:
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": True,
         "roi_temporal_hold_frames": 1,
+        "structure_semantics": "normal",
     }
     node = module.RoiGeneratorNode()
     node.detector = types.SimpleNamespace(

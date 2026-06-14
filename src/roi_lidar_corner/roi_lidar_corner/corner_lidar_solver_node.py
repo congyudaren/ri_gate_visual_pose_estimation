@@ -185,6 +185,7 @@ class CornerLidarSolverNode(Node):
         self.declare_parameter("post_max_z_jump_m", 0.8)
         self.declare_parameter("frame_width_m", 1.0)
         self.declare_parameter("frame_height_m", 2.0)
+        self.declare_parameter("structure_semantics", "inverted_camera")
         self.declare_parameter("front_bin_size", 0.05)
         self.declare_parameter("front_keep_tolerance", 0.08)
         self.declare_parameter("rear_gap_m", 1.0)
@@ -261,6 +262,9 @@ class CornerLidarSolverNode(Node):
         )
         self.frame_width_m = float(self.get_parameter("frame_width_m").get_parameter_value().double_value)
         self.frame_height_m = float(self.get_parameter("frame_height_m").get_parameter_value().double_value)
+        self.structure_semantics = (
+            self.get_parameter("structure_semantics").get_parameter_value().string_value.strip().lower()
+        )
         self.post_max_z_jump_m = float(self.get_parameter("post_max_z_jump_m").get_parameter_value().double_value)
         self.front_bin_size = float(self.get_parameter("front_bin_size").get_parameter_value().double_value)
         self.front_keep_tolerance = float(
@@ -633,7 +637,12 @@ class CornerLidarSolverNode(Node):
         return normalized_frames
 
     def _publish_solution(self, header: Header) -> None:
-        solution = restore_front_face(self.track, width_m=self.frame_width_m, height_m=self.frame_height_m)
+        solution = restore_front_face(
+            self.track,
+            width_m=self.frame_width_m,
+            height_m=self.frame_height_m,
+            structure_semantics=self.structure_semantics,
+        )
         frame_header = Header()
         frame_header.stamp = header.stamp
         frame_header.frame_id = self.output_frame_id or header.frame_id

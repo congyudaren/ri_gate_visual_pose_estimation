@@ -8,11 +8,23 @@ import numpy as np
 
 def build_structure_lines(
     corners: Mapping[str, tuple[float, float]],
+    structure_semantics: str = "normal",
 ) -> dict[str, tuple[tuple[float, float], tuple[float, float]]]:
+    semantics = str(structure_semantics).strip().lower()
+    if semantics == "normal":
+        top_beam = (tuple(corners["TL"]), tuple(corners["TR"]))
+        left_post = (tuple(corners["TL"]), tuple(corners["BL"]))
+        right_post = (tuple(corners["TR"]), tuple(corners["BR"]))
+    elif semantics == "inverted_camera":
+        top_beam = (tuple(corners["BL"]), tuple(corners["BR"]))
+        left_post = (tuple(corners["TR"]), tuple(corners["BR"]))
+        right_post = (tuple(corners["TL"]), tuple(corners["BL"]))
+    else:
+        raise ValueError(f"unsupported structure_semantics: {structure_semantics!r}")
     return {
-        "top_beam": (tuple(corners["TL"]), tuple(corners["TR"])),
-        "left_post": (tuple(corners["TL"]), tuple(corners["BL"])),
-        "right_post": (tuple(corners["TR"]), tuple(corners["BR"])),
+        "top_beam": top_beam,
+        "left_post": left_post,
+        "right_post": right_post,
     }
 
 

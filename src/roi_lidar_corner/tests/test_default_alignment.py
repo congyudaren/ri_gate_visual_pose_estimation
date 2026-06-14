@@ -10,6 +10,7 @@ GENERATOR_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_generator_node.py
 SOLVER_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "corner_lidar_solver_node.py"
 DEBUG_MARKERS_NODE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_lidar_debug_markers.py"
 CONFIG_PATH = PACKAGE_ROOT / "config" / "roi_lidar_corner.yaml"
+README_PATH = PACKAGE_ROOT / "README.md"
 
 
 def _literal_value(node: ast.AST):
@@ -99,6 +100,7 @@ def test_standalone_launch_defaults_match_current_wrapper_values() -> None:
     assert defaults["image_topic"] == "/camera/color/image_raw"
     assert defaults["publish_debug_image"] == "true"
     assert defaults["corner_radius"] == "5"
+    assert defaults["structure_semantics"] == "inverted_camera"
     assert defaults["publish_debug_uv"] == "true"
     assert defaults["debug_overlay_frame_count"] == "1"
     assert defaults["subscribe_corner3d_debug"] == "true"
@@ -136,6 +138,7 @@ def test_roi_generator_node_declares_current_wrapper_defaults() -> None:
     assert defaults["image_topic"] == "/camera/color/image_raw"
     assert defaults["publish_debug_image"] is True
     assert defaults["corner_radius"] == 5
+    assert defaults["structure_semantics"] == "inverted_camera"
     assert defaults["detector_backend"] == "pt"
     assert 'declare_parameter("detector_model_path", _default_share_file("models", "best.pt"))' in text
     assert 'declare_parameter("detector_names_path", _default_share_file("models", "detect.names"))' in text
@@ -155,6 +158,7 @@ def test_corner_solver_node_declares_current_wrapper_defaults() -> None:
     assert defaults["max_window_frames"] == 30
     assert defaults["corner_target_points"] == 6
     assert defaults["post_max_z_jump_m"] == 0.8
+    assert defaults["structure_semantics"] == "inverted_camera"
     assert defaults["output_frame_id"] == "body"
     assert defaults["output_extrinsic_r_00"] == 0.0
     assert defaults["output_extrinsic_r_02"] == 1.0
@@ -191,4 +195,17 @@ def test_config_keeps_legacy_corner3d_debug_topic_separate_from_front_face_corne
     text = CONFIG_PATH.read_text(encoding="utf-8")
 
     assert "corner3d_topic: /roi_lidar_corner/corners3d" in text
+    assert "structure_semantics: inverted_camera" in text
     assert "point_output_topic: /roi_lidar_corner/front_face_corners" in text
+
+
+def test_readme_documents_front_face_corner_semantics() -> None:
+    text = README_PATH.read_text(encoding="utf-8")
+
+    assert "`structure_semantics` is the shared source of truth" in text
+    assert "`roi_generator_node` and `corner_lidar_solver_node`" in text
+    assert "`top_left` and `top_right` are the physical top-edge points" in text
+    assert "`LEFT_POST` is" in text
+    assert "the image-right vertical" in text
+    assert "`RIGHT_POST` is the image-left vertical post" in text
+    assert "physical/body convention" in text

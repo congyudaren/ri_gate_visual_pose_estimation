@@ -29,7 +29,21 @@ def _invalid_solution() -> FrontFaceSolution:
     )
 
 
-def restore_front_face(track, width_m: float, height_m: float) -> FrontFaceSolution:
+def _bottom_y_from_top(y_top: float, height_m: float, structure_semantics: str) -> float:
+    semantics = str(structure_semantics).strip().lower()
+    if semantics == "normal":
+        return y_top + float(height_m)
+    if semantics == "inverted_camera":
+        return y_top - float(height_m)
+    raise ValueError(f"unsupported structure_semantics: {structure_semantics!r}")
+
+
+def restore_front_face(
+    track,
+    width_m: float,
+    height_m: float,
+    structure_semantics: str = "normal",
+) -> FrontFaceSolution:
     if not track.left_post.initialized or not track.right_post.initialized:
         return _invalid_solution()
     if not track.model_initialized and not track.top_beam.initialized:
@@ -38,8 +52,9 @@ def restore_front_face(track, width_m: float, height_m: float) -> FrontFaceSolut
     y_top = float(track.top_beam.y_top_state)
     top_left = (float(track.left_post.x_state), y_top, float(track.left_post.z_state))
     top_right = (float(track.right_post.x_state), y_top, float(track.right_post.z_state))
-    bottom_left = (top_left[0], top_left[1] + float(height_m), top_left[2])
-    bottom_right = (top_right[0], top_right[1] + float(height_m), top_right[2])
+    y_bottom = _bottom_y_from_top(y_top, height_m, structure_semantics)
+    bottom_left = (top_left[0], y_bottom, top_left[2])
+    bottom_right = (top_right[0], y_bottom, top_right[2])
     confidence = min(
         1.0,
         max(0.0, (float(track.left_post.confidence) + float(track.right_post.confidence)) * 0.5),

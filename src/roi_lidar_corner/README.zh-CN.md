@@ -101,6 +101,19 @@ corner_lidar_solver_node:
                          0.0, 1.0, 0.0]
 ```
 
+`structure_semantics` 是同时传给 `roi_generator_node` 和 `corner_lidar_solver_node`
+的共享配置来源，用于定义 2D 结构标签到物理语义的映射：
+
+- `normal`：结构标签沿用图像空间顺序。
+- `inverted_camera`：结构标签使用当前倒装相机和默认相机/body 外参下的物理/body 语义。
+  `TOP_BEAM` 使用图像下方水平边，`LEFT_POST` 使用图像右侧立柱，
+  `RIGHT_POST` 使用图像左侧立柱。
+
+默认值是 `inverted_camera`。在 `/roi_lidar_corner/front_face_corners` 中，
+`top_left` 和 `top_right` 表示经过 `output_frame_id` 与 `output_extrinsic_*`
+变换后的物理上边缘点。`left` 和 `right` 名称按配置的 `structure_semantics`
+使用对应的物理/body 约定。
+
 Topic 默认值、检测器选项、求解器阈值和调试设置都放在 `config/roi_lidar_corner.yaml`。
 
 ## 验证

@@ -173,3 +173,33 @@ def test_standalone_launch_keeps_legacy_corner3d_debug_topic_off_front_face_corn
     assert isinstance(merged_parameters["corner3d_topic"], FakeLaunchConfiguration)
     assert merged_parameters["corner3d_topic"].name == "corner3d_topic"
     assert merged_parameters["corner3d_topic"].name != "point_output_topic"
+
+
+def test_standalone_launch_passes_structure_semantics_to_generator() -> None:
+    module = _load_launch_module()
+    description = module.generate_launch_description()
+    defaults = _declare_argument_defaults(description)
+
+    generator = _find_node(description, executable="roi_generator_node.py")
+    merged_parameters = {}
+    for parameter_set in generator.parameters:
+        if isinstance(parameter_set, dict):
+            merged_parameters.update(parameter_set)
+
+    assert defaults["structure_semantics"] == "inverted_camera"
+    assert isinstance(merged_parameters["structure_semantics"], FakeLaunchConfiguration)
+    assert merged_parameters["structure_semantics"].name == "structure_semantics"
+
+
+def test_standalone_launch_passes_structure_semantics_to_solver() -> None:
+    module = _load_launch_module()
+    description = module.generate_launch_description()
+
+    solver = _find_node(description, executable="corner_lidar_solver_node.py")
+    merged_parameters = {}
+    for parameter_set in solver.parameters:
+        if isinstance(parameter_set, dict):
+            merged_parameters.update(parameter_set)
+
+    assert isinstance(merged_parameters["structure_semantics"], FakeLaunchConfiguration)
+    assert merged_parameters["structure_semantics"].name == "structure_semantics"

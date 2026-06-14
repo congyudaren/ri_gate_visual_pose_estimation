@@ -552,7 +552,7 @@ def test_solver_node_publishes_front_face_outputs() -> None:
     node = module.CornerLidarSolverNode()
     node.output_extrinsic_R = np.eye(3, dtype=np.float64)
     node.output_extrinsic_t = np.zeros(3, dtype=np.float64)
-    module.restore_front_face = lambda track, width_m, height_m: types.SimpleNamespace(
+    module.restore_front_face = lambda track, width_m, height_m, structure_semantics="normal": types.SimpleNamespace(
         valid=True,
         solution_state="tracking",
         top_left=(-0.5, -0.2, 2.0),
@@ -615,7 +615,7 @@ def test_solver_node_transforms_output_points_into_body_frame() -> None:
         "output_extrinsic_r_22": 1.0,
     }
     node = module.CornerLidarSolverNode()
-    module.restore_front_face = lambda track, width_m, height_m: types.SimpleNamespace(
+    module.restore_front_face = lambda track, width_m, height_m, structure_semantics="normal": types.SimpleNamespace(
         valid=True,
         solution_state="tracking",
         top_left=(1.0, 0.0, 0.0),
@@ -637,6 +637,33 @@ def test_solver_node_transforms_output_points_into_body_frame() -> None:
     assert node.point_pub.messages[-1].top_right.x == 0.0
     assert node.point_pub.messages[-1].top_right.y == 2.0
     assert node.point_pub.messages[-1].top_right.z == 3.0
+
+
+def test_solver_node_publishes_inverted_camera_top_above_bottom_in_body_frame() -> None:
+    module, _lookback_module = load_solver_node_module()
+    node = module.CornerLidarSolverNode()
+    node.point_pub = FakePublisher("/roi_lidar_corner/front_face_corners")
+    node.debug_pub = FakePublisher("/roi_lidar_corner/front_face_debug")
+    node.track.left_post.initialized = True
+    node.track.left_post.x_state = -0.5
+    node.track.left_post.z_state = 2.0
+    node.track.left_post.confidence = 1.0
+    node.track.right_post.initialized = True
+    node.track.right_post.x_state = 0.5
+    node.track.right_post.z_state = 2.1
+    node.track.right_post.confidence = 1.0
+    node.track.top_beam.initialized = True
+    node.track.top_beam.y_top_state = 1.8
+    node.track.top_beam.confidence = 1.0
+    node.track.model_initialized = True
+
+    node._publish_solution(Header(stamp=Stamp(sec=2), frame_id="camera"))
+
+    msg = node.point_pub.messages[-1]
+    assert msg.header.frame_id == "body"
+    assert msg.top_left.z == pytest.approx(1.8)
+    assert msg.bottom_left.z == pytest.approx(-0.2)
+    assert msg.top_left.z > msg.bottom_left.z
 
 
 def test_cloud_callback_caches_decoded_cloud_frame() -> None:

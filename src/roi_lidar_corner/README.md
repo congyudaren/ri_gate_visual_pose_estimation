@@ -53,6 +53,22 @@ corner_lidar_solver_node:
                          0.0, 1.0, 0.0]
 ```
 
+`structure_semantics` is the shared source of truth passed to
+`roi_generator_node` and `corner_lidar_solver_node` for mapping 2D structure
+labels onto physical frame semantics:
+
+- `normal`: labels follow the image-space structure order.
+- `inverted_camera`: labels follow physical/body semantics for the current
+  upside-down camera mount and default camera/body extrinsic. `TOP_BEAM` is
+  the image-bottom horizontal edge, `LEFT_POST` is the image-right vertical
+  post, and `RIGHT_POST` is the image-left vertical post.
+
+The default is `inverted_camera`. In `/roi_lidar_corner/front_face_corners`,
+`top_left` and `top_right` are the physical top-edge points after applying the
+configured `output_frame_id` and `output_extrinsic_*` transform. The `left` and
+`right` names use the physical/body convention for the configured
+`structure_semantics`.
+
 Topic defaults, detector options, solver thresholds, and debug settings live in `config/roi_lidar_corner.yaml`.
 
 ## Verification

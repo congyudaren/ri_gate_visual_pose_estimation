@@ -8,6 +8,7 @@ roi_generator_node:
     detector_input_size: 640
     detector_use_gpu: true
     detector_class_filter: "[]"
+    structure_semantics: inverted_camera
     roi_output_topic: /roi_lidar_corner/front_face_rois
     corner3d_topic: /roi_lidar_corner/corners3d
     solver_debug_uv_topic: /roi_lidar_corner/solver_debug_uv
@@ -60,6 +61,7 @@ corner_lidar_solver_node:
     post_max_z_jump_m: 0.8
     frame_width_m: 1.0
     frame_height_m: 2.0
+    structure_semantics: inverted_camera
     front_bin_size: 0.05
     front_keep_tolerance: 0.08
     rear_gap_m: 1.0

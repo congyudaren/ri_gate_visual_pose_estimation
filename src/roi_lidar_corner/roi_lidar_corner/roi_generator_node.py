@@ -186,6 +186,7 @@ class RoiGeneratorNode(Node):
         self.declare_parameter("corner_radius", 5)
         self.declare_parameter("post_mask_half_width", 5)
         self.declare_parameter("beam_mask_half_width", 5)
+        self.declare_parameter("structure_semantics", "inverted_camera")
         self.declare_parameter("publish_debug_image", True)
         self.declare_parameter("debug_image_topic", "/roi_lidar_corner/roi_debug")
         self.declare_parameter("corner3d_topic", "/roi_lidar_corner/corners3d")
@@ -226,6 +227,9 @@ class RoiGeneratorNode(Node):
         )
         self.beam_mask_half_width = int(
             self.get_parameter("beam_mask_half_width").get_parameter_value().integer_value
+        )
+        self.structure_semantics = (
+            self.get_parameter("structure_semantics").get_parameter_value().string_value.strip().lower()
         )
         self.publish_debug_image = self.get_parameter("publish_debug_image").get_parameter_value().bool_value
         self.debug_image_topic = self.get_parameter("debug_image_topic").get_parameter_value().string_value
@@ -631,7 +635,7 @@ class RoiGeneratorNode(Node):
             "BL": tuple(corners[2]),
             "BR": tuple(corners[3]),
         }
-        return StructureCandidate(lines=build_structure_lines(corners_by_label))
+        return StructureCandidate(lines=build_structure_lines(corners_by_label, self.structure_semantics))
 
     def _build_structure_rois(
         self,
@@ -648,7 +652,7 @@ class RoiGeneratorNode(Node):
             "BL": tuple(corners[2]),
             "BR": tuple(corners[3]),
         }
-        lines = build_structure_lines(corners_by_label)
+        lines = build_structure_lines(corners_by_label, self.structure_semantics)
         configs = (
             ("left_post", StructureROI.LEFT_POST, self.post_mask_half_width),
             ("right_post", StructureROI.RIGHT_POST, self.post_mask_half_width),
