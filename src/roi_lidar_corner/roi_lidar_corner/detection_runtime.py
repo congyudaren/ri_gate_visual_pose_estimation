@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 import cv2
@@ -279,6 +280,10 @@ class UltralyticsDetector:
                 imgsz=self.input_size,
                 verbose=False,
                 device=self.device,
+                save=False,
+                project=Path(tempfile.gettempdir()) / "roi_lidar_corner_ultralytics",
+                name="roi_lidar_corner_predict",
+                exist_ok=True,
             )
         finally:
             cv2.copyMakeBorder = original_copy_make_border

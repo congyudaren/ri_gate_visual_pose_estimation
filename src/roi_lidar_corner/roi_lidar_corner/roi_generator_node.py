@@ -38,7 +38,7 @@ from roi_lidar_corner.roi_geometry_prior import (
     temporal_jump_reason,
     validate_structure_candidate,
 )
-from roi_lidar_corner.neo_roi_refiner import refine_corners_inside_bbox
+from roi_lidar_corner.neo_roi_refiner import refine_corners_inside_bbox_with_source
 from roi_lidar_corner.structure_roi_builder import build_structure_lines, dilate_line_mask
 
 CORNER_LABELS = {
@@ -54,6 +54,18 @@ CORNER_COLORS = {
     2: (255, 0, 0),
     3: (0, 255, 255),
 }
+
+
+def _source_base(source: str) -> str:
+    return str(source).split(":", 1)[0]
+
+
+def _source_with_reason(source: str, reason: str) -> str:
+    source = str(source)
+    reason = str(reason)
+    if not reason or reason == "ok" or ":" in source:
+        return source
+    return f"{source}:{reason}"
 
 
 def _default_share_file(*parts: str) -> str:
@@ -445,9 +457,8 @@ class RoiGeneratorNode(Node):
         if self.roi_enable_temporal_prior and len(detections) > 1:
             self._clear_temporal_prior_state()
         for det_idx, detection in enumerate(detections):
-            source = "corner_refined"
             try:
-                corners = refine_corners_inside_bbox(
+                refinement = refine_corners_inside_bbox_with_source(
                     cv_image,
                     detection.bbox,
                     canny_low=self.neo_canny_low,
@@ -459,10 +470,17 @@ class RoiGeneratorNode(Node):
                     border_size=None,
                     border_ratio=self.neo_border_ratio,
                 )
+                corners = list(refinement.corners)
+                source = _source_with_reason(
+                    str(refinement.source),
+                    str(getattr(refinement, "reason", "")),
+                )
+                if _source_base(source) == "bbox_fallback":
+                    fallback_count += 1
             except Exception as exc:
                 self.get_logger().warn(f"neo refine failed, fallback to bbox corners: {exc}")
                 corners = build_bbox_corners(detection.bbox)
-                source = "bbox_fallback"
+                source = "bbox_fallback:exception"
                 fallback_count += 1
 
             bbox_corners = build_bbox_corners(detection.bbox)
@@ -480,8 +498,8 @@ class RoiGeneratorNode(Node):
                 )
                 if not validation.valid:
                     selected_corners = bbox_corners
-                    if source != "bbox_fallback":
-                        source = "bbox_fallback"
+                    if _source_base(source) != "bbox_fallback":
+                        source = "bbox_fallback:geometry_prior"
                         fallback_count += 1
 
             candidate = self._candidate_from_corners(selected_corners)
@@ -493,7 +511,7 @@ class RoiGeneratorNode(Node):
                 )
                 if jump_reason is not None and self.last_valid_corners is not None:
                     selected_corners = list(self.last_valid_corners)
-                    source = "temporal_hold"
+                    source = f"temporal_hold:{jump_reason}"
 
             object_roi = self._build_front_face_roi(
                 header=msg.header,
@@ -505,11 +523,14 @@ class RoiGeneratorNode(Node):
             )
             if object_roi is not None:
                 objects.append(object_roi)
-                if use_temporal_prior and source in {"corner_refined", "bbox_fallback"}:
+                source_base = _source_base(source)
+                if use_temporal_prior and source_base == "corner_refined":
                     self.last_valid_candidate = self._candidate_from_corners(selected_corners)
                     self.last_valid_corners = list(selected_corners)
                     self.last_valid_detection = detection
                     self.missed_detection_frames = 0
+                elif use_temporal_prior and source_base == "bbox_fallback":
+                    self._clear_temporal_prior_state()
 
         out = FrontFaceROIArray()
         out.header = msg.header

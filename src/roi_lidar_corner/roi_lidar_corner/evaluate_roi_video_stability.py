@@ -9,7 +9,7 @@ import statistics
 import sys
 import time
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -31,12 +31,15 @@ CSV_FIELDS = [
     "left_mx",
     "left_my",
     "left_len",
+    "left_source",
     "right_mx",
     "right_my",
     "right_len",
+    "right_source",
     "top_mx",
     "top_my",
     "top_len",
+    "top_source",
 ]
 
 
@@ -56,6 +59,7 @@ class ObjectMetrics:
     conf: float
     bbox_xyxy: Tuple[float, float, float, float]
     lines: Mapping[str, LineMetrics]
+    sources: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -85,10 +89,56 @@ def _primary_objects(results: Iterable[FrameResult]) -> List[ObjectMetrics]:
     return [result.objects[0] for result in results if result.objects]
 
 
+def _line_is_left_bbox(line: LineMetrics, x1: float, tolerance_px: float) -> bool:
+    return (
+        line.u0 is not None
+        and line.u1 is not None
+        and abs(float(line.u0) - float(x1)) <= tolerance_px
+        and abs(float(line.u1) - float(x1)) <= tolerance_px
+    )
+
+
+def _line_is_right_bbox(line: LineMetrics, x2: float, tolerance_px: float) -> bool:
+    return (
+        line.u0 is not None
+        and line.u1 is not None
+        and abs(float(line.u0) - float(x2)) <= tolerance_px
+        and abs(float(line.u1) - float(x2)) <= tolerance_px
+    )
+
+
+def _line_is_top_bbox(line: LineMetrics, y1: float, tolerance_px: float) -> bool:
+    return (
+        line.v0 is not None
+        and line.v1 is not None
+        and abs(float(line.v0) - float(y1)) <= tolerance_px
+        and abs(float(line.v1) - float(y1)) <= tolerance_px
+    )
+
+
+def _is_bbox_like_object(obj: ObjectMetrics, tolerance_px: float = 3.0) -> bool:
+    left = obj.lines.get("left")
+    right = obj.lines.get("right")
+    top = obj.lines.get("top")
+    if left is None or right is None or top is None:
+        return False
+    x1, y1, x2, _y2 = obj.bbox_xyxy
+    return (
+        _line_is_left_bbox(left, x1, tolerance_px)
+        and _line_is_right_bbox(right, x2, tolerance_px)
+        and _line_is_top_bbox(top, y1, tolerance_px)
+    )
+
+
 def summarize_results(results: Sequence[FrameResult], elapsed_sec: float) -> Dict[str, object]:
     primary = _primary_objects(results)
     missed = [result.frame for result in results if not result.objects]
     multi = [result.frame for result in results if len(result.objects) > 1]
+    bbox_like = [
+        result.frame
+        for result in results
+        if result.objects and _is_bbox_like_object(result.objects[0])
+    ]
     summary: Dict[str, object] = {
         "frames": len(results),
         "elapsed_sec": float(elapsed_sec),
@@ -96,11 +146,20 @@ def summarize_results(results: Sequence[FrameResult], elapsed_sec: float) -> Dic
         "detected_frames": len(primary),
         "missed_frames": len(missed),
         "multi_object_frames": len(multi),
+        "bbox_like_frames": len(bbox_like),
         "missed_frame_indices": missed,
         "multi_frame_indices": multi,
+        "bbox_like_frame_indices": bbox_like,
     }
     if not primary:
         return summary
+
+    source_counts: Dict[str, int] = {}
+    for item in primary:
+        for source in item.sources.values():
+            key = str(source) if source else "unknown"
+            source_counts[key] = source_counts.get(key, 0) + 1
+    summary["source_counts"] = source_counts
 
     confs = [item.conf for item in primary]
     summary["conf_min"] = float(min(confs))
@@ -163,6 +222,7 @@ def _object_to_row(result: FrameResult) -> Dict[str, str]:
         row[f"{structure_name}_mx"] = _format_float(line.mid_x)
         row[f"{structure_name}_my"] = _format_float(line.mid_y)
         row[f"{structure_name}_len"] = _format_float(line.length)
+        row[f"{structure_name}_source"] = str(obj.sources.get(structure_name, ""))
     return row
 
 
@@ -482,10 +542,17 @@ def _object_metrics(obj) -> ObjectMetrics:
         STRUCTURE_NAMES.get(int(structure.structure_label), str(int(structure.structure_label))): _line_metrics(structure)
         for structure in obj.structures
     }
+    sources = {
+        STRUCTURE_NAMES.get(int(structure.structure_label), str(int(structure.structure_label))): str(
+            getattr(structure, "source", "")
+        )
+        for structure in obj.structures
+    }
     return ObjectMetrics(
         conf=float(obj.conf),
         bbox_xyxy=tuple(float(value) for value in obj.bbox_xyxy),
         lines=lines,
+        sources=sources,
     )
 
 
@@ -596,8 +663,14 @@ def print_summary(summary: Mapping[str, object], csv_path: Path) -> None:
     )
     print(
         f"detected={summary['detected_frames']} missed={summary['missed_frames']} "
-        f"multi={summary['multi_object_frames']}"
+        f"multi={summary['multi_object_frames']} bbox_like={summary['bbox_like_frames']}"
     )
+    source_counts = summary.get("source_counts", {})
+    if isinstance(source_counts, dict):
+        print(
+            "source_counts="
+            + ",".join(f"{key}:{value}" for key, value in sorted(source_counts.items()))
+        )
     if "conf_min" in summary:
         print(f"conf_min={summary['conf_min']:.4f} conf_mean={summary['conf_mean']:.4f}")
     for key in (
@@ -622,6 +695,9 @@ def print_summary(summary: Mapping[str, object], csv_path: Path) -> None:
     multi = summary.get("multi_frame_indices", [])
     if multi:
         print("multi_frame_indices=" + ",".join(str(value) for value in list(multi)[:100]))
+    bbox_like = summary.get("bbox_like_frame_indices", [])
+    if bbox_like:
+        print("bbox_like_frame_indices=" + ",".join(str(value) for value in list(bbox_like)[:100]))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

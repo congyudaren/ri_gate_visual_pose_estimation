@@ -73,6 +73,7 @@ def test_write_results_csv_includes_bbox_and_structure_columns(tmp_path: Path) -
                 ObjectMetrics(
                     conf=0.95,
                     bbox_xyxy=(100.0, 40.0, 300.0, 440.0),
+                    sources={"left": "corner_refined", "right": "corner_refined", "top": "corner_refined"},
                     lines={
                         "left": LineMetrics(mid_x=105.0, mid_y=240.0, length=400.0),
                         "right": LineMetrics(mid_x=295.0, mid_y=240.0, length=400.0),
@@ -89,6 +90,7 @@ def test_write_results_csv_includes_bbox_and_structure_columns(tmp_path: Path) -
     assert rows[0]["frame"] == "4"
     assert rows[0]["objects"] == "1"
     assert rows[0]["bbox_cx"] == "200.000000"
+    assert rows[0]["left_source"] == "corner_refined"
     assert rows[0]["left_len"] == "400.000000"
     assert rows[0]["top_my"] == "45.000000"
 
@@ -103,6 +105,7 @@ def test_render_annotated_frame_draws_bbox_and_structure_lines() -> None:
             ObjectMetrics(
                 conf=0.95,
                 bbox_xyxy=(20.0, 10.0, 120.0, 100.0),
+                sources={"left": "corner_refined", "top": "corner_refined"},
                 lines={
                     "left": LineMetrics(
                         mid_x=25.0,
@@ -133,3 +136,96 @@ def test_render_annotated_frame_draws_bbox_and_structure_lines() -> None:
     assert np.any(annotated != image)
     assert annotated[10, 20].any()
     assert annotated[55, 25].any()
+
+
+def test_summarize_results_reports_source_counts_and_bbox_like_frames() -> None:
+    results = [
+        FrameResult(
+            frame=0,
+            objects=[
+                ObjectMetrics(
+                    conf=0.95,
+                    bbox_xyxy=(20.0, 10.0, 120.0, 100.0),
+                    sources={"left": "corner_refined", "right": "corner_refined", "top": "corner_refined"},
+                    lines={
+                        "left": LineMetrics(
+                            mid_x=20.0,
+                            mid_y=55.0,
+                            length=90.0,
+                            u0=20.0,
+                            v0=10.0,
+                            u1=20.0,
+                            v1=100.0,
+                        ),
+                        "right": LineMetrics(
+                            mid_x=120.0,
+                            mid_y=55.0,
+                            length=90.0,
+                            u0=120.0,
+                            v0=10.0,
+                            u1=120.0,
+                            v1=100.0,
+                        ),
+                        "top": LineMetrics(
+                            mid_x=70.0,
+                            mid_y=10.0,
+                            length=100.0,
+                            u0=20.0,
+                            v0=10.0,
+                            u1=120.0,
+                            v1=10.0,
+                        ),
+                    },
+                )
+            ],
+        ),
+        FrameResult(
+            frame=1,
+            objects=[
+                ObjectMetrics(
+                    conf=0.95,
+                    bbox_xyxy=(20.0, 10.0, 120.0, 100.0),
+                    sources={
+                        "left": "bbox_fallback:no_hough_lines",
+                        "right": "bbox_fallback:no_hough_lines",
+                        "top": "bbox_fallback:no_hough_lines",
+                    },
+                    lines={
+                        "left": LineMetrics(
+                            mid_x=35.0,
+                            mid_y=55.0,
+                            length=80.0,
+                            u0=35.0,
+                            v0=18.0,
+                            u1=35.0,
+                            v1=92.0,
+                        ),
+                        "right": LineMetrics(
+                            mid_x=105.0,
+                            mid_y=55.0,
+                            length=80.0,
+                            u0=105.0,
+                            v0=18.0,
+                            u1=105.0,
+                            v1=92.0,
+                        ),
+                        "top": LineMetrics(
+                            mid_x=70.0,
+                            mid_y=22.0,
+                            length=70.0,
+                            u0=35.0,
+                            v0=22.0,
+                            u1=105.0,
+                            v1=22.0,
+                        ),
+                    },
+                )
+            ],
+        ),
+    ]
+
+    summary = summarize_results(results, elapsed_sec=0.5)
+
+    assert summary["source_counts"] == {"corner_refined": 3, "bbox_fallback:no_hough_lines": 3}
+    assert summary["bbox_like_frames"] == 1
+    assert summary["bbox_like_frame_indices"] == [0]

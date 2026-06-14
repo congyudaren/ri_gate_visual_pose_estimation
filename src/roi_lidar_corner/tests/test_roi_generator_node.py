@@ -12,6 +12,10 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = PACKAGE_ROOT / "roi_lidar_corner" / "roi_generator_node.py"
 
 
+def _refinement(corners, source: str = "corner_refined", reason: str = "ok"):
+    return types.SimpleNamespace(corners=corners, source=source, reason=reason)
+
+
 def _install_module(name: str, module: types.ModuleType) -> None:
     sys.modules[name] = module
 
@@ -42,6 +46,7 @@ def _load_generator_module():
 
     cv2 = types.ModuleType("cv2")
     cv2.FONT_HERSHEY_SIMPLEX = 0
+    cv2.LINE_AA = 0
     cv2.RETR_EXTERNAL = 0
     cv2.CHAIN_APPROX_SIMPLE = 0
     cv2.circle = lambda *_args, **_kwargs: None
@@ -66,7 +71,14 @@ def _load_generator_module():
         return None
 
     cv2.line = fake_line
-    cv2.rectangle = lambda *_args, **_kwargs: None
+    def fake_rectangle(image, start, end, value, thickness=1, *_args, **_kwargs):
+        fake_line(image, start, (end[0], start[1]), value, thickness)
+        fake_line(image, (end[0], start[1]), end, value, thickness)
+        fake_line(image, end, (start[0], end[1]), value, thickness)
+        fake_line(image, (start[0], end[1]), start, value, thickness)
+        return None
+
+    cv2.rectangle = fake_rectangle
     cv2.put_text_calls = []
 
     def fake_put_text(_image, text, *_args, **_kwargs):
@@ -291,6 +303,10 @@ def _load_generator_module():
 
     neo_roi_refiner = types.ModuleType("roi_lidar_corner.neo_roi_refiner")
     neo_roi_refiner.refine_corners_inside_bbox = lambda *_args, **_kwargs: []
+    neo_roi_refiner.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement(
+        [],
+        source="bbox_fallback",
+    )
     _install_module("roi_lidar_corner.neo_roi_refiner", neo_roi_refiner)
 
     spec = importlib.util.spec_from_file_location("roi_generator_node_under_test", MODULE_PATH)
@@ -323,12 +339,12 @@ def test_debug_subscriptions_are_not_created_when_debug_image_is_disabled() -> N
 
 def test_publishes_structure_rois_from_refined_corners() -> None:
     module = _load_generator_module()
-    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
         (10.0, 20.0),
         (30.0, 20.0),
         (10.0, 60.0),
         (30.0, 60.0),
-    ]
+    ])
 
     detection = types.SimpleNamespace(
         bbox=(10.0, 20.0, 30.0, 60.0),
@@ -426,12 +442,12 @@ def test_build_front_face_roi_marks_structure_source() -> None:
 
 def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
     module = _load_generator_module()
-    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
         (10.0, 20.0),
         (110.0, 20.0),
         (10.0, 24.0),
         (110.0, 220.0),
-    ]
+    ])
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": False,
@@ -455,7 +471,7 @@ def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
     node.image_callback(image_msg)
 
     structures = node.publisher.published[-1].objects[0].structures
-    assert {structure.source for structure in structures} == {"bbox_fallback"}
+    assert {structure.source for structure in structures} == {"bbox_fallback:geometry_prior"}
     left = next(item for item in structures if item.structure_label == 0)
     assert left.line_v0 == 20.0
     assert left.line_v1 == 220.0
@@ -469,9 +485,9 @@ def test_temporal_prior_rejects_large_structure_jump() -> None:
     ]
 
     def refine(*_args, **_kwargs):
-        return refinements.pop(0)
+        return _refinement(refinements.pop(0))
 
-    module.refine_corners_inside_bbox = refine
+    module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
@@ -497,7 +513,7 @@ def test_temporal_prior_rejects_large_structure_jump() -> None:
     node.image_callback(image_msg)
 
     second = node.publisher.published[-1].objects[0]
-    assert {structure.source for structure in second.structures} == {"temporal_hold"}
+    assert {structure.source.split(":", 1)[0] for structure in second.structures} == {"temporal_hold"}
     top = next(item for item in second.structures if item.structure_label == 2)
     assert top.line_v0 == 80.0
     assert top.line_v1 == 80.0
@@ -512,9 +528,9 @@ def test_temporal_prior_ignores_multi_detection_frame() -> None:
     ]
 
     def refine(*_args, **_kwargs):
-        return refinements.pop(0)
+        return _refinement(refinements.pop(0))
 
-    module.refine_corners_inside_bbox = refine
+    module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
@@ -582,9 +598,9 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
     ]
 
     def refine(*_args, **_kwargs):
-        return refinements.pop(0)
+        return _refinement(refinements.pop(0))
 
-    module.refine_corners_inside_bbox = refine
+    module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
@@ -651,12 +667,12 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
 
 def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> None:
     module = _load_generator_module()
-    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
         (100.0, 80.0),
         (200.0, 80.0),
         (100.0, 280.0),
         (200.0, 280.0),
-    ]
+    ])
     detection = types.SimpleNamespace(
         bbox=(90.0, 70.0, 210.0, 290.0),
         class_id=3,
@@ -685,7 +701,7 @@ def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> 
 
     held = node.publisher.published[-1].objects
     assert len(held) == 1
-    assert {structure.source for structure in held[0].structures} == {"temporal_hold"}
+    assert {structure.source.split(":", 1)[0] for structure in held[0].structures} == {"temporal_hold"}
     assert node.last_valid_candidate is not None
     assert node.last_valid_corners == [
         (100.0, 80.0),
@@ -705,9 +721,9 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
     ]
 
     def refine(*_args, **_kwargs):
-        return refinements.pop(0)
+        return _refinement(refinements.pop(0))
 
-    module.refine_corners_inside_bbox = refine
+    module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
@@ -735,7 +751,7 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
 
     held = node.publisher.published[-2].objects[0]
     accepted = node.publisher.published[-1].objects[0]
-    assert {structure.source for structure in held.structures} == {"temporal_hold"}
+    assert {structure.source.split(":", 1)[0] for structure in held.structures} == {"temporal_hold"}
     assert {structure.source for structure in accepted.structures} == {"corner_refined"}
     accepted_top = next(item for item in accepted.structures if item.structure_label == 2)
     assert accepted_top.line_u0 == 102.0
@@ -746,12 +762,12 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
 
 def test_short_detector_miss_holds_previous_roi() -> None:
     module = _load_generator_module()
-    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
         (100.0, 80.0),
         (200.0, 80.0),
         (100.0, 280.0),
         (200.0, 280.0),
-    ]
+    ])
     detections = [
         [types.SimpleNamespace(bbox=(90.0, 70.0, 210.0, 290.0), class_id=3, conf=0.9, class_name="gate")],
         [],
@@ -776,18 +792,62 @@ def test_short_detector_miss_holds_previous_roi() -> None:
 
     held = node.publisher.published[-1]
     assert len(held.objects) == 1
-    assert {structure.source for structure in held.objects[0].structures} == {"temporal_hold"}
+    assert {structure.source.split(":", 1)[0] for structure in held.objects[0].structures} == {"temporal_hold"}
     assert node.missed_detection_frames == 1
+
+
+def test_temporal_hold_does_not_stabilize_bbox_fallback() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (90.0, 70.0),
+        (210.0, 70.0),
+        (90.0, 290.0),
+        (210.0, 290.0),
+    ],
+        source="bbox_fallback",
+        reason="no_hough_lines",
+    )
+    first_detection = types.SimpleNamespace(
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    detections = [[first_detection], []]
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": True,
+        "roi_temporal_hold_frames": 2,
+    }
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=detections.pop(0)),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+    node.image_callback(image_msg)
+
+    first = node.publisher.published[-2].objects[0]
+    assert {structure.source for structure in first.structures} == {"bbox_fallback:no_hough_lines"}
+    assert node.publisher.published[-1].objects == []
+    assert node.last_valid_candidate is None
+    assert node.last_valid_corners is None
+    assert node.last_valid_detection is None
 
 
 def test_long_detector_miss_clears_output() -> None:
     module = _load_generator_module()
-    module.refine_corners_inside_bbox = lambda *_args, **_kwargs: [
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
         (100.0, 80.0),
         (200.0, 80.0),
         (100.0, 280.0),
         (200.0, 280.0),
-    ]
+    ])
     first_detection = types.SimpleNamespace(
         bbox=(90.0, 70.0, 210.0, 290.0),
         class_id=3,
