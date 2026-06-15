@@ -71,6 +71,22 @@ def test_top_bottom_flip_is_rejected() -> None:
     assert result.reason == "top_not_near_bbox_top"
 
 
+def test_inverted_camera_top_beam_near_bbox_bottom_is_accepted() -> None:
+    result = validate_structure_candidate(
+        candidate(
+            left=((200.0, 80.0), (200.0, 280.0)),
+            right=((100.0, 80.0), (100.0, 280.0)),
+            top=((100.0, 280.0), (200.0, 280.0)),
+        ),
+        bbox=(90.0, 70.0, 210.0, 290.0),
+        image_shape=(480, 640),
+        config=GeometryPriorConfig(top_edge_reference="bbox_bottom"),
+    )
+
+    assert result.valid is True
+    assert result.reason == "accepted"
+
+
 def test_border_clipped_bbox_relaxes_ratio_check() -> None:
     result = validate_structure_candidate(
         candidate(

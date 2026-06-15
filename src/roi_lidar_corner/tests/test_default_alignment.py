@@ -99,6 +99,7 @@ def test_standalone_launch_defaults_match_current_wrapper_values() -> None:
 
     assert defaults["image_topic"] == "/camera/color/image_raw"
     assert defaults["publish_debug_image"] == "true"
+    assert defaults["publish_only_pure_rois"] == "true"
     assert defaults["corner_radius"] == "5"
     assert defaults["structure_semantics"] == "inverted_camera"
     assert defaults["publish_debug_uv"] == "true"
@@ -118,6 +119,11 @@ def test_standalone_launch_defaults_match_current_wrapper_values() -> None:
     assert defaults["corner_target_points"] == "6"
     assert defaults["post_max_z_jump_m"] == "0.8"
     assert defaults["detector_use_gpu"] == "true"
+    assert defaults["neo_hough_threshold"] == "30"
+    assert defaults["neo_min_line_length"] == "35"
+    assert defaults["neo_border_ratio"] == "0.30"
+    assert defaults["roi_top_post_ratio_tolerance"] == "0.35"
+    assert defaults["roi_max_top_offset_bbox_ratio"] == "0.10"
 
 
 def test_standalone_launch_arguments_have_visible_categories() -> None:
@@ -137,6 +143,7 @@ def test_roi_generator_node_declares_current_wrapper_defaults() -> None:
 
     assert defaults["image_topic"] == "/camera/color/image_raw"
     assert defaults["publish_debug_image"] is True
+    assert defaults["publish_only_pure_rois"] is True
     assert defaults["corner_radius"] == 5
     assert defaults["structure_semantics"] == "inverted_camera"
     assert defaults["detector_backend"] == "pt"
@@ -144,6 +151,11 @@ def test_roi_generator_node_declares_current_wrapper_defaults() -> None:
     assert 'declare_parameter("detector_names_path", _default_share_file("models", "detect.names"))' in text
     assert defaults["detector_use_gpu"] is True
     assert defaults["detector_class_filter"] == "[]"
+    assert defaults["neo_hough_threshold"] == 30
+    assert defaults["neo_min_line_length"] == 35
+    assert defaults["neo_border_ratio"] == 0.30
+    assert defaults["roi_top_post_ratio_tolerance"] == 0.35
+    assert defaults["roi_max_top_offset_bbox_ratio"] == 0.10
 
 
 def test_corner_solver_node_declares_current_wrapper_defaults() -> None:

@@ -575,6 +575,7 @@ def evaluate_video(
         package_root=package_root,
         parameter_overrides={
             "publish_debug_image": False,
+            "publish_only_pure_rois": False,
             "detector_use_gpu": bool(use_gpu),
             "detector_model_path": str(model_path),
             "detector_names_path": str(names_path),

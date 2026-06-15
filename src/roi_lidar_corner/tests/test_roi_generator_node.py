@@ -550,6 +550,7 @@ def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
         (110.0, 220.0),
     ])
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": False,
         "structure_semantics": "normal",
@@ -579,6 +580,276 @@ def test_invalid_refined_geometry_falls_back_to_bbox_structures() -> None:
     assert left.line_v1 == 220.0
 
 
+def test_default_published_roi_filters_out_non_pure_refined_objects() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 20.0),
+        (90.0, 20.0),
+        (30.0, 150.0),
+        (100.0, 150.0),
+    ])
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    assert node.publisher.published[-1].objects == []
+
+
+def test_diagnostic_mode_can_publish_non_pure_refined_objects() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 20.0),
+        (90.0, 20.0),
+        (30.0, 150.0),
+        (100.0, 150.0),
+    ])
+    module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"hybrid_recovery:vertical_bbox_bottom"}
+
+
+def test_inverted_camera_interior_top_beam_uses_refined_posts_with_bbox_bottom() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 20.0),
+        (90.0, 20.0),
+        (30.0, 150.0),
+        (100.0, 150.0),
+    ])
+    module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"hybrid_recovery:vertical_bbox_bottom"}
+    top = next(item for item in structures if item.structure_label == module.StructureROI.TOP_BEAM)
+    assert top.line_u0 == 25.0
+    assert top.line_v0 == 220.0
+    assert top.line_u1 == 95.0
+    assert top.line_v1 == 220.0
+    left = next(item for item in structures if item.structure_label == module.StructureROI.LEFT_POST)
+    assert left.line_u0 == 95.0
+    assert left.line_v0 == 20.0
+    assert left.line_u1 == 95.0
+    assert left.line_v1 == 220.0
+
+
+def test_inverted_camera_hybrid_recovery_requires_real_post_coverage() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 20.0),
+        (90.0, 20.0),
+        (30.0, 130.0),
+        (100.0, 130.0),
+    ])
+    module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"bbox_fallback:geometry_prior"}
+
+
+def test_inverted_camera_bottom_edge_like_refined_top_is_kept_when_bbox_bottom_is_not_clipped() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 30.0),
+        (90.0, 30.0),
+        (20.0, 216.0),
+        (90.0, 216.0),
+    ])
+    module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"corner_refined"}
+    top = next(item for item in structures if item.structure_label == module.StructureROI.TOP_BEAM)
+    assert top.line_v0 == 216.0
+    assert top.line_v1 == 216.0
+
+
+def test_inverted_camera_bottom_edge_like_refined_top_is_hybrid_when_bbox_bottom_is_clipped() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 30.0),
+        (90.0, 30.0),
+        (20.0, 216.0),
+        (90.0, 216.0),
+    ])
+    module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+        "roi_border_relax_px": 8.0,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((224, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"hybrid_recovery:bottom_edge_like"}
+
+
+def test_inverted_camera_refined_top_with_clear_bottom_offset_remains_corner_refined() -> None:
+    module = _load_generator_module()
+    module.refine_corners_inside_bbox_with_source = lambda *_args, **_kwargs: _refinement([
+        (20.0, 30.0),
+        (90.0, 30.0),
+        (20.0, 210.0),
+        (90.0, 210.0),
+    ])
+    module.Node.parameter_overrides = {
+        "roi_enable_geometry_prior": True,
+        "roi_enable_temporal_prior": False,
+        "structure_semantics": "inverted_camera",
+        "roi_max_top_offset_bbox_ratio": 0.10,
+    }
+    detection = types.SimpleNamespace(
+        bbox=(10.0, 20.0, 110.0, 220.0),
+        class_id=3,
+        conf=0.9,
+        class_name="gate",
+    )
+    node = module.RoiGeneratorNode()
+    node.detector = types.SimpleNamespace(
+        available=True,
+        detect=lambda _image: types.SimpleNamespace(detections=[detection]),
+    )
+    image_msg = types.SimpleNamespace(
+        header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=1, nanosec=0)),
+        cv_image=np.zeros((480, 640, 3), dtype=np.uint8),
+    )
+
+    node.image_callback(image_msg)
+
+    structures = node.publisher.published[-1].objects[0].structures
+    assert {structure.source for structure in structures} == {"corner_refined"}
+
+
 def test_temporal_prior_rejects_large_structure_jump() -> None:
     module = _load_generator_module()
     refinements = [
@@ -591,6 +862,7 @@ def test_temporal_prior_rejects_large_structure_jump() -> None:
 
     module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
@@ -635,6 +907,7 @@ def test_temporal_prior_ignores_multi_detection_frame() -> None:
 
     module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
@@ -706,6 +979,7 @@ def test_multi_detection_frame_clears_temporal_prior_state() -> None:
 
     module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
@@ -790,6 +1064,7 @@ def test_zero_detection_frame_preserves_temporal_prior_state_for_miss_hold() -> 
         return types.SimpleNamespace(detections=detections_by_frame.pop(0))
 
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
@@ -831,6 +1106,7 @@ def test_temporal_hold_does_not_update_last_valid_candidate() -> None:
 
     module.refine_corners_inside_bbox_with_source = refine
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": False,
         "roi_enable_temporal_prior": True,
         "roi_max_line_jump_px": 40.0,
@@ -880,6 +1156,7 @@ def test_short_detector_miss_holds_previous_roi() -> None:
         [],
     ]
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": True,
         "roi_temporal_hold_frames": 2,
@@ -923,6 +1200,7 @@ def test_temporal_hold_does_not_stabilize_bbox_fallback() -> None:
     )
     detections = [[first_detection], []]
     module.Node.parameter_overrides = {
+        "publish_only_pure_rois": False,
         "roi_enable_geometry_prior": True,
         "roi_enable_temporal_prior": True,
         "roi_temporal_hold_frames": 2,

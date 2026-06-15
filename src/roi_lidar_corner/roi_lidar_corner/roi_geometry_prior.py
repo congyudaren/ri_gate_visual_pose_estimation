@@ -15,6 +15,7 @@ class GeometryPriorConfig:
     min_post_bbox_height_ratio: float = 0.45
     expected_top_post_ratio: float = 0.5
     top_post_ratio_tolerance: float = 0.25
+    top_edge_reference: str = "bbox_top"
     border_ratio_tolerance_scale: float = 2.0
     border_post_height_ratio_scale: float = 0.5
     border_post_similarity_ratio_scale: float = 0.5
@@ -131,9 +132,14 @@ def validate_structure_candidate(
         return ValidationResult(False, "top_post_ratio")
 
     _top_mx, top_my = line_midpoint(top)
-    top_offset_scale = float(config.top_border_offset_ratio_scale) if top_clipped else 1.0
+    top_reference = str(config.top_edge_reference).strip().lower()
+    reference_clipped = bottom_clipped if top_reference == "bbox_bottom" else top_clipped
+    top_offset_scale = float(config.top_border_offset_ratio_scale) if reference_clipped else 1.0
     max_top_offset = bbox_h * float(config.max_top_offset_bbox_ratio) * top_offset_scale
-    if top_my > y1 + max_top_offset:
+    if top_reference == "bbox_bottom":
+        if top_my < y2 - max_top_offset:
+            return ValidationResult(False, "top_not_near_bbox_bottom")
+    elif top_my > y1 + max_top_offset:
         return ValidationResult(False, "top_not_near_bbox_top")
 
     return ValidationResult(True, "accepted")

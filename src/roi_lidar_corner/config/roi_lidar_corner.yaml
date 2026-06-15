@@ -16,20 +16,22 @@ roi_generator_node:
     debug_image_topic: /roi_lidar_corner/roi_debug
     subscribe_corner3d_debug: true
     subscribe_solver_debug_uv: true
+    publish_only_pure_rois: true
     neo_canny_low: 50
     neo_canny_high: 200
-    neo_hough_threshold: 50
-    neo_min_line_length: 50
+    neo_hough_threshold: 30
+    neo_min_line_length: 35
     neo_max_line_gap: 50
     neo_blur_kernel_size: 5
-    neo_border_ratio: 0.15
+    neo_border_ratio: 0.30
     roi_enable_geometry_prior: true
     roi_enable_temporal_prior: true
     roi_temporal_hold_frames: 5
     roi_max_line_jump_px: 80.0
     roi_min_post_bbox_height_ratio: 0.45
     roi_expected_top_post_ratio: 0.5
-    roi_top_post_ratio_tolerance: 0.25
+    roi_top_post_ratio_tolerance: 0.35
+    roi_max_top_offset_bbox_ratio: 0.10
     roi_border_relax_px: 8.0
 
 corner_lidar_solver_node:

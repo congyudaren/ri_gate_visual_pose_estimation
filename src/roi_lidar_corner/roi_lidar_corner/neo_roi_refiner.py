@@ -62,6 +62,107 @@ def _is_bbox_border_candidate(
     return bool(left_like or right_like or top_like)
 
 
+def _line_x_mid(line: Sequence[float]) -> float:
+    return (float(line[0]) + float(line[2])) * 0.5
+
+
+def _line_y_min(line: Sequence[float]) -> float:
+    return min(float(line[1]), float(line[3]))
+
+
+def _line_y_max(line: Sequence[float]) -> float:
+    return max(float(line[1]), float(line[3]))
+
+
+def _line_length(line: Sequence[float]) -> float:
+    return float(np.hypot(float(line[2]) - float(line[0]), float(line[3]) - float(line[1])))
+
+
+def _vertical_pair_score(left_line: Sequence[float], right_line: Sequence[float]) -> float:
+    left_len = _line_length(left_line)
+    right_len = _line_length(right_line)
+    shorter_len = min(left_len, right_len)
+    longer_len = max(left_len, right_len)
+    shared_y = max(
+        0.0,
+        min(_line_y_max(left_line), _line_y_max(right_line))
+        - max(_line_y_min(left_line), _line_y_min(right_line)),
+    )
+    separation = abs(_line_x_mid(right_line) - _line_x_mid(left_line))
+    length_similarity = shorter_len / max(1.0, longer_len)
+    return 2.0 * shared_y + 0.7 * shorter_len + 0.5 * separation + 25.0 * length_similarity
+
+
+def _prefer_outer_side_posts(
+    pair: Tuple[Sequence[float], Sequence[float]],
+    vertical_lines: Sequence[Sequence[float]],
+    roi_height: int,
+) -> Tuple[Sequence[float], Sequence[float]]:
+    min_side_post_len = max(1.0, float(roi_height) * 0.5)
+    left_line, right_line = pair
+    left_x = _line_x_mid(left_line)
+    right_x = _line_x_mid(right_line)
+
+    left_candidates = [
+        line
+        for line in vertical_lines
+        if _line_x_mid(line) <= left_x and _line_length(line) >= min_side_post_len
+    ]
+    right_candidates = [
+        line
+        for line in vertical_lines
+        if _line_x_mid(line) >= right_x and _line_length(line) >= min_side_post_len
+    ]
+    if left_candidates:
+        left_line = min(left_candidates, key=_line_x_mid)
+    if right_candidates:
+        right_line = max(right_candidates, key=_line_x_mid)
+    return left_line, right_line
+
+
+def _select_vertical_pair(
+    vertical_lines: Sequence[Sequence[float]],
+    roi_height: int,
+) -> Tuple[Sequence[float], Sequence[float]]:
+    ordered = sorted(vertical_lines, key=lambda line: min(line[0], line[2]))
+    current_pair = (ordered[0], ordered[-1])
+    best_pair: Optional[Tuple[Sequence[float], Sequence[float]]] = None
+    best_score: Optional[float] = None
+    for left_index, first in enumerate(vertical_lines):
+        for second in vertical_lines[left_index + 1 :]:
+            left_line, right_line = (first, second)
+            if _line_x_mid(left_line) > _line_x_mid(right_line):
+                left_line, right_line = right_line, left_line
+            score = _vertical_pair_score(left_line, right_line)
+            if best_score is None or score > best_score:
+                best_pair = (left_line, right_line)
+                best_score = score
+    if best_pair is None:
+        return current_pair
+
+    current_shorter = min(_line_length(current_pair[0]), _line_length(current_pair[1]))
+    best_shorter = min(_line_length(best_pair[0]), _line_length(best_pair[1]))
+    current_shared_y = max(
+        0.0,
+        min(_line_y_max(current_pair[0]), _line_y_max(current_pair[1]))
+        - max(_line_y_min(current_pair[0]), _line_y_min(current_pair[1])),
+    )
+    best_shared_y = max(
+        0.0,
+        min(_line_y_max(best_pair[0]), _line_y_max(best_pair[1]))
+        - max(_line_y_min(best_pair[0]), _line_y_min(best_pair[1])),
+    )
+    current_separation = abs(_line_x_mid(current_pair[1]) - _line_x_mid(current_pair[0]))
+    best_separation = abs(_line_x_mid(best_pair[1]) - _line_x_mid(best_pair[0]))
+    if (
+        best_shorter >= current_shorter * 1.2
+        and best_shared_y >= current_shared_y
+        and best_separation >= current_separation * 0.75
+    ):
+        return _prefer_outer_side_posts(best_pair, vertical_lines, roi_height)
+    return _prefer_outer_side_posts(current_pair, vertical_lines, roi_height)
+
+
 def refine_corners_inside_bbox_with_source(
     rgb_image: np.ndarray,
     bbox: Tuple[float, float, float, float],
@@ -129,12 +230,14 @@ def refine_corners_inside_bbox_with_source(
         return CornerRefinementResult(corners=fallback, source="bbox_fallback", reason="missing_vertical")
 
     horizontal_lines.sort(key=lambda line: min(line[1], line[3]))
-    vertical_lines.sort(key=lambda line: min(line[0], line[2]))
 
     top_line = horizontal_lines[0]
     bottom_line = horizontal_lines[-1]
-    left_line = vertical_lines[0]
-    right_line = vertical_lines[-1]
+    left_line, right_line = _select_vertical_pair(vertical_lines, roi_height)
+    top_y = (float(top_line[1]) + float(top_line[3])) * 0.5
+    bottom_y = (float(bottom_line[1]) + float(bottom_line[3])) * 0.5
+    if abs(bottom_y - top_y) < float(min_line_length):
+        return CornerRefinementResult(corners=fallback, source="bbox_fallback", reason="collapsed_horizontal")
 
     tl = line_intersection(top_line, left_line)
     tr = line_intersection(top_line, right_line)

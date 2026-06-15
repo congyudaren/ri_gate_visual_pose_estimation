@@ -45,11 +45,21 @@ def generate_launch_description() -> LaunchDescription:
     corner_radius_arg = _arg("corner_radius", "5", "[ROI] 检测/前脸角点周围使用的像素半径。")
     neo_canny_low_arg = _arg("neo_canny_low", "50", "[ROI] ROI 细化使用的 Canny 低阈值。")
     neo_canny_high_arg = _arg("neo_canny_high", "200", "[ROI] ROI 细化使用的 Canny 高阈值。")
-    neo_hough_threshold_arg = _arg("neo_hough_threshold", "50", "[ROI] ROI 细化使用的 Hough 直线投票阈值。")
-    neo_min_line_length_arg = _arg("neo_min_line_length", "50", "[ROI] ROI 细化接受的最小直线长度。")
+    neo_hough_threshold_arg = _arg("neo_hough_threshold", "30", "[ROI] ROI 细化使用的 Hough 直线投票阈值。")
+    neo_min_line_length_arg = _arg("neo_min_line_length", "35", "[ROI] ROI 细化接受的最小直线长度。")
     neo_max_line_gap_arg = _arg("neo_max_line_gap", "50", "[ROI] ROI 细化允许的最大 Hough 直线间隙。")
     neo_blur_kernel_size_arg = _arg("neo_blur_kernel_size", "5", "[ROI] 边缘提取前的模糊核尺寸。")
-    neo_border_ratio_arg = _arg("neo_border_ratio", "0.15", "[ROI] ROI 几何细化使用的边界比例。")
+    neo_border_ratio_arg = _arg("neo_border_ratio", "0.30", "[ROI] ROI 几何细化使用的边界比例。")
+    roi_top_post_ratio_tolerance_arg = _arg(
+        "roi_top_post_ratio_tolerance",
+        "0.35",
+        "[ROI] TOP_BEAM 长度与 post 长度比例的允许偏差。",
+    )
+    roi_max_top_offset_bbox_ratio_arg = _arg(
+        "roi_max_top_offset_bbox_ratio",
+        "0.10",
+        "[ROI] TOP_BEAM 与 bbox 对应边缘的最大偏移比例。",
+    )
     structure_semantics_arg = _arg(
         "structure_semantics",
         "inverted_camera",
@@ -77,6 +87,11 @@ def generate_launch_description() -> LaunchDescription:
 
     # ROI 包输出 topic：这些是本包对外发布的主要结果。
     roi_output_topic_arg = _arg("roi_output_topic", "/roi_lidar_corner/front_face_rois", "[输出] 前脸 ROI 数组 topic。")
+    publish_only_pure_rois_arg = _arg(
+        "publish_only_pure_rois",
+        "true",
+        "[输出] 只向下游发布 source 为 corner_refined 的 pure ROI。",
+    )
     point_output_topic_arg = _arg(
         "point_output_topic", "/roi_lidar_corner/front_face_corners", "[输出] FrontFaceCorners topic。"
     )
@@ -148,6 +163,8 @@ def generate_launch_description() -> LaunchDescription:
     neo_max_line_gap = LaunchConfiguration("neo_max_line_gap")
     neo_blur_kernel_size = LaunchConfiguration("neo_blur_kernel_size")
     neo_border_ratio = LaunchConfiguration("neo_border_ratio")
+    roi_top_post_ratio_tolerance = LaunchConfiguration("roi_top_post_ratio_tolerance")
+    roi_max_top_offset_bbox_ratio = LaunchConfiguration("roi_max_top_offset_bbox_ratio")
     structure_semantics = LaunchConfiguration("structure_semantics")
 
     # 调试输出开关。
@@ -162,6 +179,7 @@ def generate_launch_description() -> LaunchDescription:
 
     # ROI 包输出 topic。
     roi_output_topic = LaunchConfiguration("roi_output_topic")
+    publish_only_pure_rois = LaunchConfiguration("publish_only_pure_rois")
     point_output_topic = LaunchConfiguration("point_output_topic")
     debug_output_topic = LaunchConfiguration("debug_output_topic")
     diag_output_topic = LaunchConfiguration("diag_output_topic")
@@ -221,6 +239,7 @@ def generate_launch_description() -> LaunchDescription:
                 "detector_class_filter": ParameterValue(detector_class_filter, value_type=str),
                 # 发布的 ROI/调试 topic。
                 "roi_output_topic": roi_output_topic,
+                "publish_only_pure_rois": publish_only_pure_rois,
                 "corner3d_topic": corner3d_topic,
                 "solver_debug_uv_topic": debug_uv_output_topic,
                 "subscribe_corner3d_debug": subscribe_corner3d_debug,
@@ -234,6 +253,8 @@ def generate_launch_description() -> LaunchDescription:
                 "neo_max_line_gap": neo_max_line_gap,
                 "neo_blur_kernel_size": neo_blur_kernel_size,
                 "neo_border_ratio": neo_border_ratio,
+                "roi_top_post_ratio_tolerance": roi_top_post_ratio_tolerance,
+                "roi_max_top_offset_bbox_ratio": roi_max_top_offset_bbox_ratio,
                 "structure_semantics": structure_semantics,
             }
         ],
@@ -344,6 +365,8 @@ def generate_launch_description() -> LaunchDescription:
             neo_max_line_gap_arg,
             neo_blur_kernel_size_arg,
             neo_border_ratio_arg,
+            roi_top_post_ratio_tolerance_arg,
+            roi_max_top_offset_bbox_ratio_arg,
             structure_semantics_arg,
 
             # 调试输出开关。
@@ -358,6 +381,7 @@ def generate_launch_description() -> LaunchDescription:
 
             # ROI 包输出 topic。
             roi_output_topic_arg,
+            publish_only_pure_rois_arg,
             point_output_topic_arg,
             debug_output_topic_arg,
             diag_output_topic_arg,

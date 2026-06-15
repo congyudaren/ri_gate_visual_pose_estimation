@@ -35,6 +35,8 @@ from roi_lidar_corner.roi_geometry_prior import (
     StructureCandidate,
     TemporalPriorConfig,
     build_bbox_corners,
+    line_length,
+    line_midpoint,
     temporal_jump_reason,
     validate_structure_candidate,
 )
@@ -55,6 +57,9 @@ CORNER_COLORS = {
     3: (0, 255, 255),
 }
 
+_HYBRID_RECOVERY_MIN_POST_BBOX_HEIGHT_RATIO = 0.60
+_BOTTOM_EDGE_LIKE_TOP_BBOX_HEIGHT_RATIO = 0.03
+
 
 def _source_base(source: str) -> str:
     return str(source).split(":", 1)[0]
@@ -66,6 +71,13 @@ def _source_with_reason(source: str, reason: str) -> str:
     if not reason or reason == "ok" or ":" in source:
         return source
     return f"{source}:{reason}"
+
+
+def _is_pure_corner_refined_roi(obj: FrontFaceROI) -> bool:
+    structures = list(getattr(obj, "structures", []))
+    if not structures:
+        return False
+    return all(str(getattr(structure, "source", "")) == "corner_refined" for structure in structures)
 
 
 def _default_share_file(*parts: str) -> str:
@@ -193,6 +205,7 @@ class RoiGeneratorNode(Node):
         self.declare_parameter("solver_debug_uv_topic", "/roi_lidar_corner/solver_debug_uv")
         self.declare_parameter("subscribe_corner3d_debug", True)
         self.declare_parameter("subscribe_solver_debug_uv", True)
+        self.declare_parameter("publish_only_pure_rois", True)
 
         self.declare_parameter("detector_backend", "pt")
         self.declare_parameter("detector_model_path", _default_share_file("models", "best.pt"))
@@ -205,18 +218,19 @@ class RoiGeneratorNode(Node):
 
         self.declare_parameter("neo_canny_low", 50)
         self.declare_parameter("neo_canny_high", 200)
-        self.declare_parameter("neo_hough_threshold", 50)
-        self.declare_parameter("neo_min_line_length", 50)
+        self.declare_parameter("neo_hough_threshold", 30)
+        self.declare_parameter("neo_min_line_length", 35)
         self.declare_parameter("neo_max_line_gap", 50)
         self.declare_parameter("neo_blur_kernel_size", 5)
-        self.declare_parameter("neo_border_ratio", 0.15)
+        self.declare_parameter("neo_border_ratio", 0.30)
         self.declare_parameter("roi_enable_geometry_prior", True)
         self.declare_parameter("roi_enable_temporal_prior", True)
         self.declare_parameter("roi_temporal_hold_frames", 5)
         self.declare_parameter("roi_max_line_jump_px", 80.0)
         self.declare_parameter("roi_min_post_bbox_height_ratio", 0.45)
         self.declare_parameter("roi_expected_top_post_ratio", 0.5)
-        self.declare_parameter("roi_top_post_ratio_tolerance", 0.25)
+        self.declare_parameter("roi_top_post_ratio_tolerance", 0.35)
+        self.declare_parameter("roi_max_top_offset_bbox_ratio", 0.10)
         self.declare_parameter("roi_border_relax_px", 8.0)
 
         image_topic = self.get_parameter("image_topic").get_parameter_value().string_value
@@ -240,6 +254,9 @@ class RoiGeneratorNode(Node):
         )
         self.subscribe_solver_debug_uv = (
             self.get_parameter("subscribe_solver_debug_uv").get_parameter_value().bool_value
+        )
+        self.publish_only_pure_rois = (
+            self.get_parameter("publish_only_pure_rois").get_parameter_value().bool_value
         )
 
         detector_backend = self.get_parameter("detector_backend").get_parameter_value().string_value
@@ -286,6 +303,12 @@ class RoiGeneratorNode(Node):
             ),
             top_post_ratio_tolerance=float(
                 self.get_parameter("roi_top_post_ratio_tolerance").get_parameter_value().double_value
+            ),
+            top_edge_reference="bbox_bottom"
+            if self.structure_semantics == "inverted_camera"
+            else "bbox_top",
+            max_top_offset_bbox_ratio=float(
+                self.get_parameter("roi_max_top_offset_bbox_ratio").get_parameter_value().double_value
             ),
             border_relax_px=float(self.get_parameter("roi_border_relax_px").get_parameter_value().double_value),
         )
@@ -449,7 +472,7 @@ class RoiGeneratorNode(Node):
             objects = [held_roi] if held_roi is not None else []
             out = FrontFaceROIArray()
             out.header = msg.header
-            out.objects = objects
+            out.objects = self._published_objects(objects)
             self.publisher.publish(out)
             return
 
@@ -501,10 +524,26 @@ class RoiGeneratorNode(Node):
                     config=self.geometry_prior_config,
                 )
                 if not validation.valid:
-                    selected_corners = bbox_corners
-                    if _source_base(source) != "bbox_fallback":
-                        source = "bbox_fallback:geometry_prior"
-                        fallback_count += 1
+                    recovered_corners = self._recover_inverted_top_from_bbox_bottom(
+                        selected_corners,
+                        detection.bbox,
+                        cv_image.shape[:2],
+                        validation.reason,
+                    )
+                    if recovered_corners is not None:
+                        selected_corners = recovered_corners
+                        source = "hybrid_recovery:vertical_bbox_bottom"
+                    else:
+                        selected_corners = bbox_corners
+                        if _source_base(source) != "bbox_fallback":
+                            source = "bbox_fallback:geometry_prior"
+                            fallback_count += 1
+                elif _source_base(source) == "corner_refined" and self._is_bottom_edge_like_refined_top(
+                    candidate,
+                    detection.bbox,
+                    cv_image.shape[:2],
+                ):
+                    source = "hybrid_recovery:bottom_edge_like"
 
             candidate = self._candidate_from_corners(selected_corners)
             if use_temporal_prior:
@@ -538,7 +577,7 @@ class RoiGeneratorNode(Node):
 
         out = FrontFaceROIArray()
         out.header = msg.header
-        out.objects = objects
+        out.objects = self._published_objects(objects)
         self.publisher.publish(out)
 
         if self.frame_counter % self.debug_log_every_n_frames == 0:
@@ -628,6 +667,11 @@ class RoiGeneratorNode(Node):
         self.last_valid_detection = None
         self.missed_detection_frames = 0
 
+    def _published_objects(self, objects: Sequence[FrontFaceROI]) -> List[FrontFaceROI]:
+        if not self.publish_only_pure_rois:
+            return list(objects)
+        return [obj for obj in objects if _is_pure_corner_refined_roi(obj)]
+
     def _candidate_from_corners(self, corners: Sequence[Tuple[float, float]]) -> StructureCandidate:
         corners_by_label = {
             "TL": tuple(corners[0]),
@@ -636,6 +680,60 @@ class RoiGeneratorNode(Node):
             "BR": tuple(corners[3]),
         }
         return StructureCandidate(lines=build_structure_lines(corners_by_label, self.structure_semantics))
+
+    def _recover_inverted_top_from_bbox_bottom(
+        self,
+        corners: Sequence[Tuple[float, float]],
+        bbox: Sequence[float],
+        image_shape: Tuple[int, int],
+        validation_reason: str,
+    ) -> Optional[List[Tuple[float, float]]]:
+        if self.structure_semantics != "inverted_camera" or validation_reason != "top_not_near_bbox_bottom":
+            return None
+        if len(corners) < 4:
+            return None
+
+        x1, y1, x2, y2 = [float(value) for value in bbox]
+        bbox_width = max(1.0, x2 - x1)
+        bbox_height = max(1.0, y2 - y1)
+        original_candidate = self._candidate_from_corners(corners)
+        left_len = line_length(original_candidate.lines["left_post"])
+        right_len = line_length(original_candidate.lines["right_post"])
+        min_hybrid_post_len = bbox_height * _HYBRID_RECOVERY_MIN_POST_BBOX_HEIGHT_RATIO
+        if left_len < min_hybrid_post_len or right_len < min_hybrid_post_len:
+            return None
+
+        left_x = (float(corners[0][0]) + float(corners[2][0])) * 0.5
+        right_x = (float(corners[1][0]) + float(corners[3][0])) * 0.5
+        left_x = max(x1, min(x2, left_x))
+        right_x = max(x1, min(x2, right_x))
+        if right_x - left_x < bbox_width * 0.45:
+            return None
+
+        recovered = [(left_x, y1), (right_x, y1), (left_x, y2), (right_x, y2)]
+        validation = validate_structure_candidate(
+            self._candidate_from_corners(recovered),
+            bbox=bbox,
+            image_shape=image_shape,
+            config=self.geometry_prior_config,
+        )
+        return recovered if validation.valid else None
+
+    def _is_bottom_edge_like_refined_top(
+        self,
+        candidate: StructureCandidate,
+        bbox: Sequence[float],
+        image_shape: Tuple[int, int],
+    ) -> bool:
+        if self.structure_semantics != "inverted_camera":
+            return False
+        _x1, y1, _x2, y2 = [float(value) for value in bbox]
+        image_height = int(image_shape[0])
+        if y2 < float(image_height) - float(self.geometry_prior_config.border_relax_px):
+            return False
+        bbox_height = max(1.0, y2 - y1)
+        _top_mx, top_my = line_midpoint(candidate.lines["top_beam"])
+        return y2 - top_my <= bbox_height * _BOTTOM_EDGE_LIKE_TOP_BBOX_HEIGHT_RATIO
 
     def _build_structure_rois(
         self,
